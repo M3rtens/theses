@@ -12,7 +12,7 @@ export default function Profile({ navigate }) {
           <div className="flex-1">
             <div className="flex items-center gap-3 mb-1">
               <h1 className="font-serif text-3xl font-medium tracking-tight">Elena Vance</h1>
-              <span className="seal"><i className="lucide-badge-check text-[11px]"></i> Verified Analyst</span>
+              <span className="seal"><i className="icon-badge-check text-[11px]"></i> Verified Analyst</span>
             </div>
             <div className="text-sm font-mono" style={{ color: 'var(--muted)' }}>@evance · Joined Jan 2022 · San Francisco</div>
             <p className="text-sm mt-2 max-w-xl" style={{ color: 'var(--ink-soft)' }}>Long-biased equity analyst focused on capital-intensive monopolies and structural supply constraints. CFA Charterholder. Former sell-side at Bernstein.</p>

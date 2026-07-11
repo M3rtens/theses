@@ -12,6 +12,83 @@ function toTime(date) {
   return { year: d.getUTCFullYear(), month: d.getUTCMonth() + 1, day: d.getUTCDate() }
 }
 
+// Curated line items per statement, in reporting order. `bold` marks subtotals,
+// `indent` nests a line under the one above, `kind` drives client formatting
+// (money → millions, perShare → currency + 2dp, shares → millions of shares).
+// Keys map directly to yahoo-finance2's fundamentalsTimeSeries fields.
+const INCOME_ROWS = [
+  { key: 'totalRevenue', label: 'Total Revenue', bold: true },
+  { key: 'costOfRevenue', label: 'Cost of Revenue' },
+  { key: 'grossProfit', label: 'Gross Profit', bold: true },
+  { key: 'researchAndDevelopment', label: 'Research & Development', indent: true },
+  { key: 'sellingGeneralAndAdministration', label: 'Selling, General & Admin', indent: true },
+  { key: 'operatingExpense', label: 'Total Operating Expense' },
+  { key: 'operatingIncome', label: 'Operating Income', bold: true },
+  { key: 'pretaxIncome', label: 'Pretax Income' },
+  { key: 'taxProvision', label: 'Tax Provision' },
+  { key: 'netIncome', label: 'Net Income', bold: true },
+  { key: 'EBITDA', label: 'EBITDA' },
+  { key: 'dilutedEPS', label: 'Diluted EPS', kind: 'perShare' },
+]
+
+const BALANCE_ROWS = [
+  { key: 'cashAndCashEquivalents', label: 'Cash & Equivalents' },
+  { key: 'cashCashEquivalentsAndShortTermInvestments', label: 'Cash & ST Investments' },
+  { key: 'currentAssets', label: 'Total Current Assets' },
+  { key: 'netPPE', label: 'Net Property, Plant & Equip.' },
+  { key: 'totalAssets', label: 'Total Assets', bold: true },
+  { key: 'currentLiabilities', label: 'Total Current Liabilities' },
+  { key: 'totalDebt', label: 'Total Debt' },
+  { key: 'totalLiabilitiesNetMinorityInterest', label: 'Total Liabilities', bold: true },
+  { key: 'stockholdersEquity', label: "Stockholders' Equity", bold: true },
+  { key: 'workingCapital', label: 'Working Capital' },
+  { key: 'shareIssued', label: 'Shares Issued', kind: 'shares' },
+]
+
+const CASHFLOW_ROWS = [
+  { key: 'operatingCashFlow', label: 'Operating Cash Flow', bold: true },
+  { key: 'capitalExpenditure', label: 'Capital Expenditure' },
+  { key: 'freeCashFlow', label: 'Free Cash Flow', bold: true },
+  { key: 'investingCashFlow', label: 'Investing Cash Flow' },
+  { key: 'repurchaseOfCapitalStock', label: 'Repurchase of Stock' },
+  { key: 'financingCashFlow', label: 'Financing Cash Flow' },
+  { key: 'changesInCash', label: 'Net Change in Cash' },
+  { key: 'endCashPosition', label: 'End Cash Position' },
+]
+
+// A period-end date -> column label. Annual reports as the fiscal year; quarterly
+// as the calendar quarter of the period-end month.
+function periodLabel(date, type) {
+  const d = new Date(date)
+  const y = d.getUTCFullYear()
+  if (type === 'annual') return `FY${y}`
+  const q = Math.floor(d.getUTCMonth() / 3) + 1
+  return `Q${q} '${String(y).slice(2)}`
+}
+
+// Turn a fundamentalsTimeSeries array into a { periods, rows } table: oldest to
+// newest, last `n` periods, dropping any line the company never reports.
+function buildTable(items, rowDefs, type, n) {
+  const periods = (items || [])
+    .filter((d) => d && d.date)
+    // Drop boundary periods Yahoo returns with only metadata and no line items
+    // (e.g. ASML's FY2021, which comes back with every statement field null).
+    .filter((d) => rowDefs.some((def) => d[def.key] != null))
+    .sort((a, b) => new Date(a.date) - new Date(b.date))
+    .slice(-n)
+  const cols = periods.map((p) => ({ label: periodLabel(p.date, type) }))
+  const rows = rowDefs
+    .map((def) => ({
+      label: def.label,
+      bold: !!def.bold,
+      indent: !!def.indent,
+      kind: def.kind || 'money',
+      values: periods.map((p) => (p[def.key] == null ? null : p[def.key])),
+    }))
+    .filter((r) => r.values.some((v) => v != null))
+  return { periods: cols, rows }
+}
+
 const BENCHMARK = '^GSPC' // S&P 500
 
 // Home country -> Yahoo exchange code(s), in preference order. Used to point a
@@ -138,6 +215,38 @@ export async function getThesisData(inputSymbol, from) {
     history,
     benchmark,
     financials,
+  }
+}
+
+// Full income statement, balance sheet, and cash flow — annual and quarterly —
+// for the editor's Financials tab. Values are in the company's reporting
+// currency and native units; the client formats them (millions, EPS, shares).
+export async function getFinancialStatements(inputSymbol) {
+  const symbol = await resolvePrimarySymbol(inputSymbol)
+  const now = new Date()
+  const annualFrom = `${now.getUTCFullYear() - 6}-01-01`
+  const qtrFrom = `${now.getUTCFullYear() - 3}-01-01`
+  const ft = (module, type, period1) =>
+    yf.fundamentalsTimeSeries(symbol, { period1, type, module }).catch(() => [])
+
+  const [incA, incQ, balA, balQ, cfA, cfQ, summary] = await Promise.all([
+    ft('financials', 'annual', annualFrom),
+    ft('financials', 'quarterly', qtrFrom),
+    ft('balance-sheet', 'annual', annualFrom),
+    ft('balance-sheet', 'quarterly', qtrFrom),
+    ft('cash-flow', 'annual', annualFrom),
+    ft('cash-flow', 'quarterly', qtrFrom),
+    yf.quoteSummary(symbol, { modules: ['financialData', 'price'] }).catch(() => null),
+  ])
+
+  const currency = summary?.financialData?.financialCurrency || summary?.price?.currency || 'USD'
+  return {
+    symbol,
+    requestedSymbol: inputSymbol,
+    currency,
+    income: { annual: buildTable(incA, INCOME_ROWS, 'annual', 5), quarterly: buildTable(incQ, INCOME_ROWS, 'quarterly', 8) },
+    balance: { annual: buildTable(balA, BALANCE_ROWS, 'annual', 5), quarterly: buildTable(balQ, BALANCE_ROWS, 'quarterly', 8) },
+    cashflow: { annual: buildTable(cfA, CASHFLOW_ROWS, 'annual', 5), quarterly: buildTable(cfQ, CASHFLOW_ROWS, 'quarterly', 8) },
   }
 }
 

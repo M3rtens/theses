@@ -17,13 +17,17 @@ import { fmtPrice } from './lib/format.js'
 
 export default function App() {
   const [view, setView] = useState('dashboard')
+  const [editorDraft, setEditorDraft] = useState(null)
   const [toast, setToast] = useState('')
   const [publishOpen, setPublishOpen] = useState(false)
   const [pendingDraft, setPendingDraft] = useState(null)
   const [publishing, setPublishing] = useState(false)
   const toastTimer = useRef(null)
 
-  const navigate = useCallback((next) => {
+  // A second arg carries a draft into the editor (Continue editing); any other
+  // navigation clears it so the editor opens fresh.
+  const navigate = useCallback((next, payload = null) => {
+    setEditorDraft(next === 'editor' ? payload : null)
     setView(next)
     window.scrollTo(0, 0)
   }, [])
@@ -80,7 +84,7 @@ export default function App() {
   const renderView = () => {
     switch (view) {
       case 'dashboard': return <Dashboard navigate={navigate} />
-      case 'editor': return <Editor navigate={navigate} showToast={showToast} onOpenPublish={openPublish} />
+      case 'editor': return <Editor key={editorDraft?.id || 'new'} draft={editorDraft} navigate={navigate} showToast={showToast} onOpenPublish={openPublish} />
       case 'thesis': return <ThesisDetail navigate={navigate} />
       case 'leaderboard': return <Leaderboard navigate={navigate} />
       case 'profile': return <Profile navigate={navigate} />

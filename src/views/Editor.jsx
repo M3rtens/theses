@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import SecuritySearch from '../components/SecuritySearch.jsx'
-import { fmtPrice } from '../lib/format.js'
+import { fmtPrice, currencySymbol } from '../lib/format.js'
 import { saveDraft as persistDraft } from '../lib/drafts.js'
 
 const INITIAL_TRIGGERS = [
@@ -34,30 +34,54 @@ const INITIAL_EDITOR_HTML = `
 
 const EMBED_HTML = '<div contenteditable="false" class="my-4 p-4 border rounded" style="border-color: var(--border); background: var(--bg-warm);"><div class="text-[10px] font-mono uppercase tracking-wider" style="color: var(--muted);">Embedded Chart</div><div class="text-sm font-medium mt-1">Revenue &amp; Margin Trajectory</div><div class="text-xs mt-1" style="color: var(--ink-soft);">Linked to model · auto-updates</div></div>'
 
+const STMT_TABS = [
+  { key: 'income', label: 'Income Statement' },
+  { key: 'balance', label: 'Balance Sheet' },
+  { key: 'cashflow', label: 'Cash Flow' },
+]
+
 const SLASH_ITEMS = [
   { action: 'h1', icon: <span className="font-serif font-semibold text-xs">H1</span>, label: 'Heading 1', desc: 'Large section heading' },
   { action: 'h2', icon: <span className="font-serif font-semibold text-xs">H2</span>, label: 'Heading 2', desc: 'Medium heading' },
   { action: 'p', icon: <span className="text-xs">¶</span>, label: 'Text', desc: 'Plain paragraph' },
-  { action: 'blockquote', icon: <i className="lucide-quote text-xs"></i>, label: 'Quote', desc: 'Capture a citation' },
-  { action: 'insertUnorderedList', icon: <i className="lucide-list text-xs"></i>, label: 'Bullet List', desc: 'Unordered items' },
-  { action: 'insertOrderedList', icon: <i className="lucide-list-ordered text-xs"></i>, label: 'Numbered List', desc: 'Ordered items' },
-  { action: 'embed', icon: <i className="lucide-bar-chart-3 text-xs"></i>, label: 'Embed Chart', desc: 'Financials, charts, models' },
+  { action: 'blockquote', icon: <i className="icon-quote text-xs"></i>, label: 'Quote', desc: 'Capture a citation' },
+  { action: 'insertUnorderedList', icon: <i className="icon-list text-xs"></i>, label: 'Bullet List', desc: 'Unordered items' },
+  { action: 'insertOrderedList', icon: <i className="icon-list-ordered text-xs"></i>, label: 'Numbered List', desc: 'Ordered items' },
+  { action: 'embed', icon: <i className="icon-bar-chart-3 text-xs"></i>, label: 'Embed Chart', desc: 'Financials, charts, models' },
 ]
 
-export default function Editor({ navigate, showToast, onOpenPublish }) {
-  const [side, setSide] = useState('bull')
+export default function Editor({ draft = null, navigate, showToast, onOpenPublish }) {
+  // Rebuild the internal trigger shape from a saved draft's compact { c, s } rows.
+  const draftTriggers = draft?.triggers?.length
+    ? draft.triggers.map((t, i) => ({ id: i + 1, condition: t.c, metric: 'Custom', threshold: '—', current: '—', status: t.s }))
+    : null
+
+  const [side, setSide] = useState(draft?.side || 'bull')
   const [activeTab, setActiveTab] = useState('thesis')
-  const [triggers, setTriggers] = useState(INITIAL_TRIGGERS)
+  const [triggers, setTriggers] = useState(draftTriggers || INITIAL_TRIGGERS)
   const [slash, setSlash] = useState(null) // { x, y }
   const [dragging, setDragging] = useState(false)
-  const [security, setSecurity] = useState({ symbol: 'ASML', name: 'ASML Holding N.V.', exchange: 'AMS' })
+  const [draftId, setDraftId] = useState(draft?.id || null)
+  const [security, setSecurity] = useState(() => {
+    if (draft) {
+      return draft.ticker && draft.ticker !== '—'
+        ? { symbol: draft.ticker, name: draft.company || draft.ticker, exchange: '' }
+        : null
+    }
+    return { symbol: 'ASML', name: 'ASML Holding N.V.', exchange: 'AMS' }
+  })
   const [preview, setPreview] = useState(null)     // live price/financials for the selected security
   const [previewLoading, setPreviewLoading] = useState(false)
+  const [statements, setStatements] = useState(null) // full financial statements
+  const [stmtLoading, setStmtLoading] = useState(false)
+  const [stmtView, setStmtView] = useState('income')      // income | balance | cashflow
+  const [stmtPeriod, setStmtPeriod] = useState('annual')  // annual | quarterly
 
   const editorRef = useRef(null)
   const titleRef = useRef(null)
   const sectorRef = useRef(null)
   const dragCounter = useRef(0)
+  const stmtSymbol = useRef(null)  // symbol the loaded statements belong to
 
   // Whenever the chosen security changes, pull its live price + financials so the
   // Entry Price Lock and Financials panels preview exactly what will be sealed.
@@ -75,7 +99,38 @@ export default function Editor({ navigate, showToast, onOpenPublish }) {
     return () => { cancelled = true }
   }, [security?.symbol])
 
-  const fin = (k) => preview?.financials?.[k] ?? '—'
+  // Lazily load full statements the first time the Financials tab is opened for a
+  // security, and whenever the security changes while it's open. Kept off the
+  // entry-price preview so selecting a security stays fast.
+  useEffect(() => {
+    const symbol = security?.symbol
+    if (activeTab !== 'financials' || !symbol) return
+    if (stmtSymbol.current === symbol) return // already loaded for this symbol
+    let cancelled = false
+    setStmtLoading(true)
+    setStatements(null)
+    fetch(`/api/financials?symbol=${encodeURIComponent(symbol)}`)
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
+      .then((d) => { if (!cancelled && d && !d.error) { setStatements(d); stmtSymbol.current = symbol } })
+      .catch(() => { if (!cancelled) stmtSymbol.current = null })
+      .finally(() => { if (!cancelled) setStmtLoading(false) })
+    return () => { cancelled = true }
+  }, [activeTab, security?.symbol])
+
+  // Format a raw statement value for display. money → millions (accounting
+  // parentheses for negatives); perShare → currency + 2dp; shares → millions.
+  const fmtCell = (v, kind) => {
+    if (v == null) return '—'
+    if (kind === 'perShare') {
+      return currencySymbol(statements?.currency) + v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    }
+    if (kind === 'shares') return (v / 1e6).toLocaleString('en-US', { maximumFractionDigits: 1 }) + 'M'
+    const m = v / 1e6
+    const s = Math.abs(m).toLocaleString('en-US', { maximumFractionDigits: 0 })
+    return m < 0 ? `(${s})` : s
+  }
+
+  const activeStmt = statements?.[stmtView]?.[stmtPeriod]
 
   // Gather the editor's fields into the payload the create endpoint expects.
   const buildThesis = () => ({
@@ -97,9 +152,12 @@ export default function Editor({ navigate, showToast, onOpenPublish }) {
     onOpenPublish(draft)
   }
 
-  // Seed the contenteditable body once on mount.
+  // Seed the contenteditable body once on mount — a saved draft's body if we're
+  // continuing one, otherwise the demo starter content.
   useEffect(() => {
-    if (editorRef.current) editorRef.current.innerHTML = INITIAL_EDITOR_HTML
+    if (editorRef.current) editorRef.current.innerHTML = draft?.body || INITIAL_EDITOR_HTML
+    // Mount-only seed: App keys the editor by draft id, so it remounts per draft.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const format = (command, value = null) => {
@@ -179,16 +237,17 @@ export default function Editor({ navigate, showToast, onOpenPublish }) {
   const updateTrigger = (id, value) => setTriggers(prev => prev.map(t => t.id === id ? { ...t, condition: value } : t))
 
   const saveDraft = () => {
-    const draft = buildThesis()
-    if (!draft.title && !draft.ticker) {
+    const built = buildThesis()
+    if (!built.title && !built.ticker) {
       showToast('Add a title or select a security before saving.')
       return
     }
-    const saved = persistDraft(draft)
+    const saved = persistDraft(built, draftId)
     if (!saved) {
       showToast('Could not save draft — local storage is unavailable.')
       return
     }
+    setDraftId(saved.id)
     showToast('Draft saved · ' + new Date().toLocaleTimeString())
   }
 
@@ -204,16 +263,16 @@ export default function Editor({ navigate, showToast, onOpenPublish }) {
     <div onDragEnter={onDragEnter} onDragLeave={onDragLeave} onDragOver={(e) => e.preventDefault()} onDrop={onDrop}>
       <header className="px-12 pt-8 pb-5 border-b flex items-center justify-between" style={{ borderColor: 'var(--border)' }}>
         <div className="flex items-center gap-4">
-          <button onClick={() => navigate('dashboard')} className="toolbar-btn"><i className="lucide-arrow-left"></i></button>
+          <button onClick={() => navigate('dashboard')} className="toolbar-btn"><i className="icon-arrow-left"></i></button>
           <div>
-            <div className="text-[10px] font-mono uppercase tracking-wider" style={{ color: 'var(--muted)' }}>Draft · Auto-saved 2 min ago</div>
-            <h1 className="font-serif text-2xl font-medium">New Investment Thesis</h1>
+            <div className="text-[10px] font-mono uppercase tracking-wider" style={{ color: 'var(--muted)' }}>Draft · {draft ? 'Continuing saved draft' : 'Not yet saved'}</div>
+            <h1 className="font-serif text-2xl font-medium">{draft ? 'Edit Thesis' : 'New Investment Thesis'}</h1>
           </div>
         </div>
         <div className="flex items-center gap-2">
           <button onClick={saveDraft} className="btn-secondary text-sm px-4 py-2 rounded-md">Save Draft</button>
           <button onClick={openPublish} className="btn-primary text-sm px-4 py-2 rounded-md flex items-center gap-2">
-            <i className="lucide-lock text-xs"></i> Publish &amp; Lock
+            <i className="icon-lock text-xs"></i> Publish &amp; Lock
           </button>
         </div>
       </header>
@@ -224,7 +283,7 @@ export default function Editor({ navigate, showToast, onOpenPublish }) {
           type="text"
           placeholder="Give your thesis a clear, declarative title…"
           className="input-clean font-serif text-4xl font-medium placeholder:text-[color:var(--faint)] mb-2"
-          defaultValue="ASML: The Monopoly Below the Surface"
+          defaultValue={draft ? draft.title : 'ASML: The Monopoly Below the Surface'}
         />
 
         <div className="flex flex-wrap items-center gap-3 mb-6 pb-6 border-b" style={{ borderColor: 'var(--border)' }}>
@@ -234,7 +293,7 @@ export default function Editor({ navigate, showToast, onOpenPublish }) {
           </div>
           <div className="flex items-center gap-2">
             <span className="text-[10px] font-mono uppercase tracking-wider" style={{ color: 'var(--muted)' }}>Sector</span>
-            <select ref={sectorRef} className="text-sm px-2 py-1 input-bordered rounded" defaultValue="Semiconductors">
+            <select ref={sectorRef} className="text-sm px-2 py-1 input-bordered rounded" defaultValue={draft?.sector || 'Semiconductors'}>
               <option>Semiconductors</option>
               <option>Software</option>
               <option>Energy</option>
@@ -255,7 +314,7 @@ export default function Editor({ navigate, showToast, onOpenPublish }) {
                     <div className="font-semibold text-sm" style={{ color: bullTextColor }}>BULL / LONG</div>
                     <div className="text-[11px] mt-0.5" style={{ color: 'var(--ink-soft)' }}>Price appreciation expected</div>
                   </div>
-                  <i className="lucide-trending-up text-lg" style={{ color: bullTextColor }}></i>
+                  <i className="icon-trending-up text-lg" style={{ color: bullTextColor }}></i>
                 </div>
               </button>
               <button onClick={() => setSide('bear')} className="flex-1 py-3 px-4 border-2 rounded-md text-left transition-all" style={{ ...sideBox(side === 'bear', 'bear'), cursor: 'pointer' }}>
@@ -264,7 +323,7 @@ export default function Editor({ navigate, showToast, onOpenPublish }) {
                     <div className="font-semibold text-sm" style={{ color: bearTextColor }}>BEAR / SHORT</div>
                     <div className="text-[11px] mt-0.5" style={{ color: 'var(--muted)' }}>Decline expected</div>
                   </div>
-                  <i className="lucide-trending-down text-lg" style={{ color: bearTextColor }}></i>
+                  <i className="icon-trending-down text-lg" style={{ color: bearTextColor }}></i>
                 </div>
               </button>
             </div>
@@ -301,16 +360,16 @@ export default function Editor({ navigate, showToast, onOpenPublish }) {
               <p className="text-xs mt-0.5" style={{ color: 'var(--ink-soft)' }}>Define conditions that would break this thesis. The app monitors them automatically.</p>
             </div>
             <button onClick={addTrigger} className="text-xs font-medium flex items-center gap-1.5 px-3 py-1.5 border rounded-md hover:bg-gray-50" style={{ borderColor: 'var(--border-strong)', background: 'transparent', cursor: 'pointer' }}>
-              <i className="lucide-plus text-xs"></i> Add Trigger
+              <i className="icon-plus text-xs"></i> Add Trigger
             </button>
           </div>
           <div className="space-y-2">
             {triggers.map(t => (
               <div key={t.id} className="flex items-center gap-3 p-3 border rounded-md" style={{ borderColor: 'var(--border)', background: 'white' }}>
-                <i className="lucide-target text-sm" style={{ color: 'var(--muted)' }}></i>
+                <i className="icon-target text-sm" style={{ color: 'var(--muted)' }}></i>
                 <input type="text" defaultValue={t.condition} className="flex-1 text-sm input-clean" onChange={(e) => updateTrigger(t.id, e.target.value)} />
                 <span className="text-[10px] font-mono px-1.5 py-0.5 rounded" style={{ background: t.status === 'warning' ? 'var(--warn-soft)' : 'var(--bg-warm)', color: t.status === 'warning' ? 'var(--warn)' : 'var(--ink-soft)' }}>{t.status === 'warning' ? 'WARNING' : 'CLEAR'}</span>
-                <button onClick={() => removeTrigger(t.id)} className="toolbar-btn"><i className="lucide-x text-xs"></i></button>
+                <button onClick={() => removeTrigger(t.id)} className="toolbar-btn"><i className="icon-x text-xs"></i></button>
               </div>
             ))}
           </div>
@@ -326,29 +385,29 @@ export default function Editor({ navigate, showToast, onOpenPublish }) {
 
         <div className={tabHidden('thesis')}>
           <div className="sticky top-0 z-20 flex items-center gap-0.5 py-2 mb-3 border-b bg-white" style={{ borderColor: 'var(--border)' }}>
-            <button className="toolbar-btn" onClick={() => format('bold')} title="Bold"><i className="lucide-bold"></i></button>
-            <button className="toolbar-btn" onClick={() => format('italic')} title="Italic"><i className="lucide-italic"></i></button>
-            <button className="toolbar-btn" onClick={() => format('underline')} title="Underline"><i className="lucide-underline"></i></button>
-            <button className="toolbar-btn" onClick={() => format('strikeThrough')} title="Strikethrough"><i className="lucide-strikethrough"></i></button>
+            <button className="toolbar-btn" onClick={() => format('bold')} title="Bold"><i className="icon-bold"></i></button>
+            <button className="toolbar-btn" onClick={() => format('italic')} title="Italic"><i className="icon-italic"></i></button>
+            <button className="toolbar-btn" onClick={() => format('underline')} title="Underline"><i className="icon-underline"></i></button>
+            <button className="toolbar-btn" onClick={() => format('strikeThrough')} title="Strikethrough"><i className="icon-strikethrough"></i></button>
             <div className="w-px h-4 mx-1" style={{ background: 'var(--border)' }}></div>
             <button className="toolbar-btn" onClick={() => format('formatBlock', 'h1')} title="Heading 1"><span className="font-serif text-xs font-semibold">H1</span></button>
             <button className="toolbar-btn" onClick={() => format('formatBlock', 'h2')} title="Heading 2"><span className="font-serif text-xs font-semibold">H2</span></button>
             <button className="toolbar-btn" onClick={() => format('formatBlock', 'p')} title="Paragraph"><span className="text-xs">¶</span></button>
-            <button className="toolbar-btn" onClick={() => format('formatBlock', 'blockquote')} title="Quote"><i className="lucide-quote"></i></button>
+            <button className="toolbar-btn" onClick={() => format('formatBlock', 'blockquote')} title="Quote"><i className="icon-quote"></i></button>
             <div className="w-px h-4 mx-1" style={{ background: 'var(--border)' }}></div>
-            <button className="toolbar-btn" onClick={() => format('insertUnorderedList')} title="Bullet list"><i className="lucide-list"></i></button>
-            <button className="toolbar-btn" onClick={() => format('insertOrderedList')} title="Numbered list"><i className="lucide-list-ordered"></i></button>
+            <button className="toolbar-btn" onClick={() => format('insertUnorderedList')} title="Bullet list"><i className="icon-list"></i></button>
+            <button className="toolbar-btn" onClick={() => format('insertOrderedList')} title="Numbered list"><i className="icon-list-ordered"></i></button>
             <div className="w-px h-4 mx-1" style={{ background: 'var(--border)' }}></div>
-            <button className="toolbar-btn" onClick={() => format('createLink')} title="Link"><i className="lucide-link"></i></button>
-            <button className="toolbar-btn" onClick={insertDivider} title="Divider"><i className="lucide-minus"></i></button>
-            <button className="toolbar-btn" onClick={insertEmbed} title="Embed"><i className="lucide-bar-chart-3"></i></button>
+            <button className="toolbar-btn" onClick={() => format('createLink')} title="Link"><i className="icon-link"></i></button>
+            <button className="toolbar-btn" onClick={insertDivider} title="Divider"><i className="icon-minus"></i></button>
+            <button className="toolbar-btn" onClick={insertEmbed} title="Embed"><i className="icon-bar-chart-3"></i></button>
             <div className="ml-auto text-[10px] font-mono" style={{ color: 'var(--faint)' }}>Type / for commands</div>
           </div>
 
           {dragging && (
             <div className="absolute inset-0 z-30 flex items-center justify-center pointer-events-none" style={{ background: 'rgba(255,255,255,0.9)' }}>
               <div className="drop-zone dragging p-12 rounded-lg text-center">
-                <i className="lucide-file-text text-3xl" style={{ color: 'var(--ink)' }}></i>
+                <i className="icon-file-text text-3xl" style={{ color: 'var(--ink)' }}></i>
                 <p className="font-serif text-xl mt-3">Drop Word document to auto-format</p>
                 <p className="text-xs font-mono mt-1" style={{ color: 'var(--muted)' }}>.docx · .doc · .rtf supported</p>
               </div>
@@ -370,15 +429,15 @@ export default function Editor({ navigate, showToast, onOpenPublish }) {
           <div className="border rounded-md overflow-hidden" style={{ borderColor: 'var(--border)' }}>
             <div className="px-4 py-2.5 border-b flex items-center justify-between" style={{ borderColor: 'var(--border)', background: 'var(--bg-warm)' }}>
               <div className="flex items-center gap-2">
-                <i className="lucide-table text-sm"></i>
+                <i className="icon-table text-sm"></i>
                 <span className="text-sm font-medium">asml_model_v3.xlsx</span>
                 <span className="text-[10px] font-mono px-1.5 py-0.5" style={{ background: 'white', color: 'var(--muted)' }}>Sheet 1 of 4</span>
               </div>
               <div className="flex items-center gap-1">
-                <button className="toolbar-btn"><i className="lucide-undo-2 text-xs"></i></button>
-                <button className="toolbar-btn"><i className="lucide-redo-2 text-xs"></i></button>
+                <button className="toolbar-btn"><i className="icon-undo-2 text-xs"></i></button>
+                <button className="toolbar-btn"><i className="icon-redo-2 text-xs"></i></button>
                 <div className="w-px h-4 mx-1" style={{ background: 'var(--border)' }}></div>
-                <button className="toolbar-btn"><i className="lucide-plus text-xs"></i></button>
+                <button className="toolbar-btn"><i className="icon-plus text-xs"></i></button>
               </div>
             </div>
             <div className="overflow-x-auto">
@@ -418,29 +477,69 @@ export default function Editor({ navigate, showToast, onOpenPublish }) {
         </div>
 
         <div className={tabHidden('financials')}>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="p-5 border rounded-md" style={{ borderColor: 'var(--border)', background: 'white' }}>
-              <div className="text-[10px] font-mono uppercase tracking-wider mb-3" style={{ color: 'var(--muted)' }}>Income Statement Highlights</div>
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between"><span style={{ color: 'var(--ink-soft)' }}>Revenue (TTM)</span><span className="font-mono">{fin('revenue')}</span></div>
-                <div className="flex justify-between"><span style={{ color: 'var(--ink-soft)' }}>Gross Profit</span><span className="font-mono">{fin('grossProfit')}</span></div>
-                <div className="flex justify-between"><span style={{ color: 'var(--ink-soft)' }}>Operating Income</span><span className="font-mono">{fin('operatingIncome')}</span></div>
-                <div className="flex justify-between"><span style={{ color: 'var(--ink-soft)' }}>Net Income</span><span className="font-mono">{fin('netIncome')}</span></div>
-                <div className="flex justify-between border-t pt-2 mt-2" style={{ borderColor: 'var(--border)' }}><span style={{ color: 'var(--ink-soft)' }}>Operating Margin</span><span className="font-mono font-semibold">{fin('operatingMargin')}</span></div>
-              </div>
+          <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+            <div className="flex items-center gap-0.5 p-0.5 rounded-md" style={{ background: 'var(--bg-warm)', border: '1px solid var(--border)' }}>
+              {STMT_TABS.map(s => (
+                <button
+                  key={s.key}
+                  onClick={() => setStmtView(s.key)}
+                  className="text-xs font-medium px-3 py-1.5 rounded"
+                  style={stmtView === s.key ? { background: 'var(--ink)', color: 'white', cursor: 'pointer', border: 'none' } : { background: 'transparent', color: 'var(--ink-soft)', cursor: 'pointer', border: 'none' }}
+                >
+                  {s.label}
+                </button>
+              ))}
             </div>
-            <div className="p-5 border rounded-md" style={{ borderColor: 'var(--border)', background: 'white' }}>
-              <div className="text-[10px] font-mono uppercase tracking-wider mb-3" style={{ color: 'var(--muted)' }}>Balance Sheet Strength</div>
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between"><span style={{ color: 'var(--ink-soft)' }}>Cash &amp; Equivalents</span><span className="font-mono">{fin('cash')}</span></div>
-                <div className="flex justify-between"><span style={{ color: 'var(--ink-soft)' }}>Total Debt</span><span className="font-mono">{fin('totalDebt')}</span></div>
-                <div className="flex justify-between border-t pt-2 mt-2" style={{ borderColor: 'var(--border)' }}><span style={{ color: 'var(--ink-soft)' }}>Net Cash Position</span><span className={`font-mono ${String(fin('netCash')).startsWith('−') ? 'ret-neg' : 'ret-pos'}`}>{fin('netCash')}</span></div>
-              </div>
+            <div className="flex items-center gap-0.5 p-0.5 rounded-md" style={{ background: 'var(--bg-warm)', border: '1px solid var(--border)' }}>
+              {[['annual', 'Annual'], ['quarterly', 'Quarterly']].map(([key, label]) => (
+                <button
+                  key={key}
+                  onClick={() => setStmtPeriod(key)}
+                  className="text-xs font-medium px-3 py-1.5 rounded"
+                  style={stmtPeriod === key ? { background: 'var(--ink)', color: 'white', cursor: 'pointer', border: 'none' } : { background: 'transparent', color: 'var(--ink-soft)', cursor: 'pointer', border: 'none' }}
+                >
+                  {label}
+                </button>
+              ))}
             </div>
           </div>
-          <p className="text-[10px] font-mono mt-3" style={{ color: 'var(--faint)' }}>
-            {previewLoading ? 'Loading financials…' : preview ? 'Live via Yahoo Finance · TTM figures in reporting currency' : 'Select a security to load financials.'}
-          </p>
+
+          {!security?.symbol ? (
+            <div className="border rounded-md p-12 text-center text-sm" style={{ borderColor: 'var(--border)', color: 'var(--muted)' }}>Select a security to load financial statements.</div>
+          ) : stmtLoading ? (
+            <div className="border rounded-md p-12 text-center text-sm" style={{ borderColor: 'var(--border)', color: 'var(--muted)' }}>Loading financial statements…</div>
+          ) : !activeStmt || !activeStmt.rows.length ? (
+            <div className="border rounded-md p-12 text-center text-sm" style={{ borderColor: 'var(--border)', color: 'var(--muted)' }}>No {stmtPeriod} {STMT_TABS.find(s => s.key === stmtView)?.label.toLowerCase()} data available for {statements?.symbol || security.symbol}.</div>
+          ) : (
+            <div className="border rounded-md overflow-hidden" style={{ borderColor: 'var(--border)' }}>
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse" style={{ background: 'white' }}>
+                  <thead>
+                    <tr>
+                      <th className="text-left text-[10px] font-mono uppercase tracking-wider px-4 py-2.5" style={{ background: 'var(--bg-warm)', color: 'var(--muted)', borderBottom: '1px solid var(--border)' }}>Line Item</th>
+                      {activeStmt.periods.map((c, i) => (
+                        <th key={i} className="text-right text-[11px] font-mono px-4 py-2.5" style={{ background: 'var(--bg-warm)', color: 'var(--ink-soft)', borderBottom: '1px solid var(--border)', minWidth: '92px' }}>{c.label}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {activeStmt.rows.map((r, ri) => (
+                      <tr key={ri} style={r.bold ? { background: 'var(--bg-warm)' } : undefined}>
+                        <td className="text-sm px-4 py-2" style={{ borderBottom: '1px solid var(--border)', fontWeight: r.bold ? 600 : 400, paddingLeft: r.indent ? '2rem' : undefined, color: r.indent ? 'var(--ink-soft)' : 'var(--ink)' }}>{r.label}</td>
+                        {r.values.map((v, ci) => (
+                          <td key={ci} className="num-mono text-xs text-right px-4 py-2" style={{ borderBottom: '1px solid var(--border)', fontWeight: r.bold ? 600 : 400, color: typeof v === 'number' && v < 0 ? 'var(--bear)' : undefined }}>{fmtCell(v, r.kind)}</td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="px-4 py-2 border-t flex items-center justify-between text-[10px] font-mono" style={{ borderColor: 'var(--border)', background: 'var(--bg-warm)', color: 'var(--muted)' }}>
+                <span>In millions of {statements.currency}, except per-share and share counts</span>
+                <span>Live via Yahoo Finance</span>
+              </div>
+            </div>
+          )}
         </div>
 
         <div className={tabHidden('charts')}>

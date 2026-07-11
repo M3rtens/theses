@@ -1,11 +1,27 @@
 import ThesisCard from '../components/ThesisCard.jsx'
-import { sampleTheses } from '../data/theses.js'
+import { sampleTheses, leaderboardData } from '../data/theses.js'
 import { useLiveTheses } from '../lib/useLiveTheses.js'
-
-const ACTIVE = sampleTheses.slice(0, 5)
+import { useStoredTheses } from '../lib/useStoredTheses.js'
 
 export default function Dashboard({ navigate }) {
-  const live = useLiveTheses(ACTIVE)
+  // Published theses (from the store) plus the sample set, matching My Theses.
+  const stored = useStoredTheses()
+  const allTheses = [...stored, ...sampleTheses]
+  const active = allTheses.filter((t) => t.status !== 'closed')
+  const live = useLiveTheses(active)
+
+  // Portfolio stats computed from the theses themselves: live native-currency
+  // position return where available, else the sealed static figure. Return is
+  // already side-adjusted (a bear thesis gains when the price falls).
+  const retOf = (t) => live[t.ticker]?.ret ?? t.ret
+  const returns = allTheses.map(retOf).filter((r) => typeof r === 'number')
+  const avgReturn = returns.length ? returns.reduce((a, b) => a + b, 0) / returns.length : 0
+  const avgClass = avgReturn >= 0 ? 'ret-pos' : 'ret-neg'
+  const closed = allTheses.filter((t) => t.status === 'closed')
+  const wins = closed.filter((t) => retOf(t) > 0).length
+  const winRate = closed.length ? Math.round((wins / closed.length) * 100) : null
+  // Rank comes from the (static) leaderboard — there is no live ranking source.
+  const me = leaderboardData.find((r) => r.isYou)
   return (
     <>
       <header className="px-12 pt-8 pb-6 flex items-end justify-between border-b" style={{ borderColor: 'var(--border)' }}>
@@ -15,7 +31,7 @@ export default function Dashboard({ navigate }) {
           <p className="text-sm mt-1" style={{ color: 'var(--ink-soft)' }}>You have <span style={{ color: 'var(--bear)', fontWeight: 500 }}>2 trigger alerts</span> and <span style={{ fontWeight: 500 }}>1 draft</span> awaiting review.</p>
         </div>
         <div className="flex items-center gap-3">
-          <div className="seal"><i className="lucide-shield-check text-[11px]"></i> Integrity: Verified</div>
+          <div className="seal"><i className="icon-shield-check text-[11px]"></i> Integrity: Verified</div>
         </div>
       </header>
 
@@ -24,29 +40,29 @@ export default function Dashboard({ navigate }) {
           <div className="p-5" style={{ background: 'var(--bg)' }}>
             <div className="text-[10px] font-mono uppercase tracking-wider mb-2" style={{ color: 'var(--muted)' }}>Active Theses</div>
             <div className="flex items-baseline gap-2">
-              <span className="font-serif text-4xl font-medium">7</span>
-              <span className="text-xs num-mono" style={{ color: 'var(--ink-soft)' }}>of 12 published</span>
+              <span className="font-serif text-4xl font-medium">{active.length}</span>
+              <span className="text-xs num-mono" style={{ color: 'var(--ink-soft)' }}>of {allTheses.length} published</span>
             </div>
           </div>
           <div className="p-5" style={{ background: 'var(--bg)' }}>
             <div className="text-[10px] font-mono uppercase tracking-wider mb-2" style={{ color: 'var(--muted)' }}>Avg. Return</div>
             <div className="flex items-baseline gap-2">
-              <span className="font-serif text-4xl font-medium ret-pos">+11.4%</span>
-              <span className="text-xs num-mono" style={{ color: 'var(--ink-soft)' }}>vs S&amp;P +6.2%</span>
+              <span className={`font-serif text-4xl font-medium ${avgClass}`}>{avgReturn >= 0 ? '+' : '−'}{Math.abs(avgReturn).toFixed(1)}%</span>
+              <span className="text-xs num-mono" style={{ color: 'var(--ink-soft)' }}>across {returns.length} theses</span>
             </div>
           </div>
           <div className="p-5" style={{ background: 'var(--bg)' }}>
             <div className="text-[10px] font-mono uppercase tracking-wider mb-2" style={{ color: 'var(--muted)' }}>Win Rate</div>
             <div className="flex items-baseline gap-2">
-              <span className="font-serif text-4xl font-medium">71%</span>
-              <span className="text-xs num-mono" style={{ color: 'var(--ink-soft)' }}>5 of 7 closed</span>
+              <span className="font-serif text-4xl font-medium">{winRate == null ? '—' : `${winRate}%`}</span>
+              <span className="text-xs num-mono" style={{ color: 'var(--ink-soft)' }}>{winRate == null ? 'no closed theses' : `${wins} of ${closed.length} closed`}</span>
             </div>
           </div>
           <div className="p-5" style={{ background: 'var(--bg)' }}>
             <div className="text-[10px] font-mono uppercase tracking-wider mb-2" style={{ color: 'var(--muted)' }}>Leaderboard Rank</div>
             <div className="flex items-baseline gap-2">
-              <span className="font-serif text-4xl font-medium">#14</span>
-              <span className="text-xs num-mono" style={{ color: 'var(--ink-soft)' }}>of 2,841</span>
+              <span className="font-serif text-4xl font-medium">{me ? `#${me.rank}` : '—'}</span>
+              <span className="text-xs num-mono" style={{ color: 'var(--ink-soft)' }}>of {leaderboardData.length}</span>
             </div>
           </div>
         </div>
@@ -58,8 +74,8 @@ export default function Dashboard({ navigate }) {
               <button onClick={() => navigate('mytheses')} className="text-xs font-mono uppercase tracking-wider" style={{ color: 'var(--muted)', background: 'transparent', border: 'none', cursor: 'pointer' }}>View all →</button>
             </div>
             <div className="space-y-3">
-              {ACTIVE.map(t => (
-                <ThesisCard key={t.id} thesis={t} variant="dashboard" live={live[t.ticker]} onOpen={() => navigate('thesis')} />
+              {active.map(t => (
+                <ThesisCard key={`${t.createdAt ? 'u' : 's'}-${t.id}`} thesis={t} variant="dashboard" live={live[t.ticker]} onOpen={() => navigate('thesis')} />
               ))}
             </div>
           </div>

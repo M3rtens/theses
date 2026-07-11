@@ -13,7 +13,7 @@ export default function Leaderboard({ navigate }) {
             <h1 className="font-serif text-3xl font-medium tracking-tight">Leaderboard</h1>
             <p className="text-sm mt-1" style={{ color: 'var(--ink-soft)' }}>Rankings based on system-locked entry timestamps. No deletions. No backdating. No edits to thesis bodies.</p>
           </div>
-          <div className="seal"><i className="lucide-fingerprint text-[11px]"></i> Verified by Theses Protocol</div>
+          <div className="seal"><i className="icon-fingerprint text-[11px]"></i> Verified by Theses Protocol</div>
         </div>
 
         <div className="flex items-center gap-2 mt-6">

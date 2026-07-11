@@ -107,7 +107,7 @@ export default function SecuritySearch({ value, onSelect }) {
         {value.exchange && (
           <span className="text-[10px] font-mono px-1.5 py-0.5 rounded" style={{ background: 'var(--bg-warm)', color: 'var(--muted)' }}>{value.exchange}</span>
         )}
-        <i className="lucide-pencil text-[11px] ml-0.5" style={{ color: 'var(--muted)' }}></i>
+        <i className="icon-pencil text-[11px] ml-0.5" style={{ color: 'var(--muted)' }}></i>
       </button>
     )
   }
@@ -115,7 +115,7 @@ export default function SecuritySearch({ value, onSelect }) {
   return (
     <div ref={boxRef} className="relative" style={{ width: '320px' }}>
       <div className="flex items-center gap-2 px-2.5 py-1 input-bordered rounded" style={{ background: 'white' }}>
-        <i className="lucide-search text-xs" style={{ color: 'var(--muted)' }}></i>
+        <i className="icon-search text-xs" style={{ color: 'var(--muted)' }}></i>
         <input
           ref={inputRef}
           type="text"
@@ -127,10 +127,10 @@ export default function SecuritySearch({ value, onSelect }) {
           className="input-clean text-sm flex-1"
           autoComplete="off"
         />
-        {loading && <i className="lucide-loader-circle text-xs animate-spin" style={{ color: 'var(--muted)' }}></i>}
+        {loading && <i className="icon-loader-circle text-xs animate-spin" style={{ color: 'var(--muted)' }}></i>}
         {value && (
           <button type="button" onClick={clear} className="toolbar-btn" title="Clear">
-            <i className="lucide-x text-xs"></i>
+            <i className="icon-x text-xs"></i>
           </button>
         )}
       </div>

@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react'
+import { sampleTheses, sampleDrafts } from '../data/theses.js'
+import { loadDrafts } from '../lib/drafts.js'
 
 const WATCHLIST = [
   { symbol: 'ASML', fallback: 15.1 },
@@ -8,19 +10,35 @@ const WATCHLIST = [
 ]
 
 const NAV_MAIN = [
-  { view: 'dashboard', icon: 'lucide-layout-dashboard', label: 'Dashboard' },
-  { view: 'mytheses', icon: 'lucide-file-text', label: 'My Theses', count: '12' },
-  { view: 'drafts', icon: 'lucide-file-edit', label: 'Drafts', count: '3' },
+  { view: 'dashboard', icon: 'icon-layout-dashboard', label: 'Dashboard' },
+  { view: 'mytheses', icon: 'icon-file-text', label: 'My Theses' },
+  { view: 'drafts', icon: 'icon-file-edit', label: 'Drafts' },
 ]
 
 const NAV_COMMUNITY = [
-  { view: 'leaderboard', icon: 'lucide-trophy', label: 'Leaderboard' },
-  { view: 'discover', icon: 'lucide-compass', label: 'Discover' },
-  { view: 'profile', icon: 'lucide-user', label: 'Profile' },
+  { view: 'leaderboard', icon: 'icon-trophy', label: 'Leaderboard' },
+  { view: 'discover', icon: 'icon-compass', label: 'Discover' },
+  { view: 'profile', icon: 'icon-user', label: 'Profile' },
 ]
 
 export default function Sidebar({ view, navigate }) {
   const navClass = (v) => `nav-item ${view === v ? 'active' : ''} cursor-pointer flex items-center gap-2.5 py-1`
+
+  // Workspace counts: published theses (store) + samples, and saved drafts
+  // (localStorage) + samples. Refreshed on every navigation so a freshly
+  // published thesis or saved draft is reflected without a reload.
+  const [thesesCount, setThesesCount] = useState(sampleTheses.length)
+  const [draftCount, setDraftCount] = useState(sampleDrafts.length)
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/theses')
+      .then((r) => (r.ok ? r.json() : []))
+      .then((rows) => { if (!cancelled && Array.isArray(rows)) setThesesCount(rows.length + sampleTheses.length) })
+      .catch(() => { /* store unavailable — samples only */ })
+    setDraftCount(loadDrafts().length + sampleDrafts.length)
+    return () => { cancelled = true }
+  }, [view])
+  const counts = { mytheses: thesesCount, drafts: draftCount }
 
   const [quotes, setQuotes] = useState({})
   useEffect(() => {
@@ -50,7 +68,7 @@ export default function Sidebar({ view, navigate }) {
 
       <div className="px-4 mb-6">
         <button onClick={() => navigate('editor')} className="w-full btn-primary text-sm font-medium py-2.5 px-3 rounded-md flex items-center justify-center gap-2">
-          <i className="lucide-plus text-base"></i>
+          <i className="icon-plus text-base"></i>
           <span>New Thesis</span>
         </button>
       </div>
@@ -62,13 +80,13 @@ export default function Sidebar({ view, navigate }) {
             <li key={n.view}>
               <a onClick={() => navigate(n.view)} className={navClass(n.view)} style={{ color: 'var(--ink-soft)' }}>
                 <i className={`${n.icon} text-[15px]`}></i> {n.label}
-                {n.count && <span className="ml-auto text-[10px] font-mono" style={{ color: 'var(--faint)' }}>{n.count}</span>}
+                {counts[n.view] != null && <span className="ml-auto text-[10px] font-mono" style={{ color: 'var(--faint)' }}>{counts[n.view]}</span>}
               </a>
             </li>
           ))}
           <li>
             <a onClick={() => navigate('triggers')} className={navClass('triggers')} style={{ color: 'var(--ink-soft)' }}>
-              <i className="lucide-bell text-[15px]"></i> Triggers
+              <i className="icon-bell text-[15px]"></i> Triggers
               <span className="ml-auto inline-flex items-center justify-center w-4 h-4 text-[9px] font-mono" style={{ background: 'var(--bear)', color: 'white', borderRadius: '2px' }}>2</span>
             </a>
           </li>
@@ -109,7 +127,7 @@ export default function Sidebar({ view, navigate }) {
             <div className="text-sm font-medium truncate">Elena Vance</div>
             <div className="text-[11px] font-mono" style={{ color: 'var(--muted)' }}>@evance · 12 theses</div>
           </div>
-          <button className="toolbar-btn"><i className="lucide-settings text-sm"></i></button>
+          <button className="toolbar-btn"><i className="icon-settings text-sm"></i></button>
         </div>
       </div>
     </aside>

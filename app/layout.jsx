@@ -15,7 +15,7 @@ export default function RootLayout({ children }) {
           rel="stylesheet"
         />
         <link
-          href="https://cdn.jsdelivr.net/npm/lucide-static@latest/font/lucide.css"
+          href="https://cdn.jsdelivr.net/npm/lucide-static@0.544.0/font/lucide.css"
           rel="stylesheet"
         />
       </head>

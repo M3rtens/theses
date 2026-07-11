@@ -26,7 +26,7 @@ export default function PublishModal({ open, publishing, draft, onClose, onConfi
       <div className="bg-white border rounded-lg max-w-lg w-full" style={{ borderColor: 'var(--border-strong)', boxShadow: '0 24px 60px rgba(0,0,0,0.15)' }}>
         <div className="p-6 border-b" style={{ borderColor: 'var(--border)' }}>
           <div className="flex items-center gap-2 mb-2">
-            <i className="lucide-lock text-base"></i>
+            <i className="icon-lock text-base"></i>
             <span className="text-[10px] font-mono uppercase tracking-wider font-semibold">Publication Lock</span>
           </div>
           <h3 className="font-serif text-2xl font-medium">You're about to publish.</h3>
@@ -35,7 +35,7 @@ export default function PublishModal({ open, publishing, draft, onClose, onConfi
         <div className="p-6 space-y-4 text-sm">
           {POINTS.map((p, i) => (
             <div key={i} className="flex items-start gap-3">
-              <i className={`${p.ok ? 'lucide-check' : 'lucide-x'} text-base mt-0.5`} style={{ color: p.ok ? 'var(--bull)' : 'var(--bear)' }}></i>
+              <i className={`${p.ok ? 'icon-check' : 'icon-x'} text-base mt-0.5`} style={{ color: p.ok ? 'var(--bull)' : 'var(--bear)' }}></i>
               <div>
                 <div className="font-medium">{p.title}</div>
                 <div className="text-xs mt-0.5" style={{ color: 'var(--muted)' }}>{p.detail}</div>
@@ -50,7 +50,7 @@ export default function PublishModal({ open, publishing, draft, onClose, onConfi
               <input type="checkbox" checked={confirmed} onChange={(e) => setConfirmed(e.target.checked)} /> I understand this is irreversible
             </label>
             <button disabled={!confirmed || publishing} onClick={onConfirm} className="btn-primary text-sm px-5 py-2 rounded-md flex items-center gap-2">
-              <i className="lucide-lock text-xs"></i> {publishing ? 'Publishing…' : 'Publish & Lock'}
+              <i className="icon-lock text-xs"></i> {publishing ? 'Publishing…' : 'Publish & Lock'}
             </button>
           </div>
         </div>

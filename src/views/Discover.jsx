@@ -53,8 +53,8 @@ export default function Discover({ navigate }) {
 
                 <div className="pt-4 border-t flex items-center justify-between text-xs" style={{ borderColor: 'var(--border)' }}>
                   <div className="flex items-center gap-3" style={{ color: 'var(--muted)' }}>
-                    <span className="flex items-center gap-1"><i className="lucide-eye text-xs"></i> 1.2k</span>
-                    <span className="flex items-center gap-1"><i className="lucide-message-square text-xs"></i> 48</span>
+                    <span className="flex items-center gap-1"><i className="icon-eye text-xs"></i> 1.2k</span>
+                    <span className="flex items-center gap-1"><i className="icon-message-square text-xs"></i> 48</span>
                   </div>
                   <span className="font-medium">Read thesis →</span>
                 </div>

@@ -17,7 +17,7 @@ export default function MyTheses({ navigate }) {
             <p className="text-sm mt-1" style={{ color: 'var(--ink-soft)' }}>All active and closed published theses. Sorted by publication date.</p>
           </div>
           <button onClick={() => navigate('editor')} className="btn-primary text-sm px-4 py-2 rounded-md flex items-center gap-2">
-            <i className="lucide-plus text-xs"></i> New Thesis
+            <i className="icon-plus text-xs"></i> New Thesis
           </button>
         </div>
 

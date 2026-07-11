@@ -57,7 +57,7 @@ export default function ThesisDetail({ navigate }) {
             <span className="font-mono">ASML</span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="seal"><i className="lucide-fingerprint text-[11px]"></i> Locked Mar 14, 2024 · 09:32:14 EST</div>
+            <div className="seal"><i className="icon-fingerprint text-[11px]"></i> Locked Mar 14, 2024 · 09:32:14 EST</div>
           </div>
         </div>
 
@@ -164,7 +164,7 @@ export default function ThesisDetail({ navigate }) {
               <div className="flex items-baseline justify-between mb-5">
                 <h3 className="font-serif text-xl font-medium">Thesis Updates</h3>
                 <button className="text-xs font-medium flex items-center gap-1.5 px-3 py-1.5 border rounded-md" style={{ borderColor: 'var(--border-strong)', background: 'transparent', cursor: 'pointer' }}>
-                  <i className="lucide-plus text-xs"></i> Append Update
+                  <i className="icon-plus text-xs"></i> Append Update
                 </button>
               </div>
               <div className="space-y-6">
@@ -270,28 +270,28 @@ export default function ThesisDetail({ navigate }) {
                 <button className="w-full text-left p-3 border rounded text-xs hover:bg-gray-50" style={{ borderColor: 'var(--border)', background: 'transparent', cursor: 'pointer' }}>
                   <div className="flex items-center justify-between">
                     <span className="font-medium">Append Update</span>
-                    <i className="lucide-plus text-xs"></i>
+                    <i className="icon-plus text-xs"></i>
                   </div>
                   <p style={{ color: 'var(--muted)' }} className="mt-0.5">Add timestamped note</p>
                 </button>
                 <button className="w-full text-left p-3 border rounded text-xs hover:bg-gray-50" style={{ borderColor: 'var(--border)', background: 'transparent', cursor: 'pointer' }}>
                   <div className="flex items-center justify-between">
                     <span className="font-medium">Set Future Close Date</span>
-                    <i className="lucide-calendar text-xs"></i>
+                    <i className="icon-calendar text-xs"></i>
                   </div>
                   <p style={{ color: 'var(--muted)' }} className="mt-0.5">Non-changeable once set</p>
                 </button>
                 <button className="w-full text-left p-3 border rounded text-xs hover:bg-gray-50" style={{ borderColor: 'var(--border)', background: 'transparent', cursor: 'pointer' }}>
                   <div className="flex items-center justify-between">
                     <span className="font-medium">Close Thesis Now</span>
-                    <i className="lucide-check text-xs"></i>
+                    <i className="icon-check text-xs"></i>
                   </div>
                   <p style={{ color: 'var(--muted)' }} className="mt-0.5">Lock final performance</p>
                 </button>
                 <button disabled className="w-full text-left p-3 border rounded text-xs opacity-50 cursor-not-allowed" style={{ borderColor: 'var(--border)', background: 'transparent' }}>
                   <div className="flex items-center justify-between">
                     <span className="font-medium">Delete Thesis</span>
-                    <i className="lucide-lock text-xs"></i>
+                    <i className="icon-lock text-xs"></i>
                   </div>
                   <p style={{ color: 'var(--muted)' }} className="mt-0.5">Disabled — integrity protected</p>
                 </button>
@@ -300,7 +300,7 @@ export default function ThesisDetail({ navigate }) {
 
             <div className="p-4 border rounded" style={{ borderColor: 'var(--border)', background: 'var(--bg-warm)' }}>
               <div className="flex items-center gap-2 mb-2">
-                <i className="lucide-shield-check text-sm"></i>
+                <i className="icon-shield-check text-sm"></i>
                 <span className="text-xs font-mono uppercase tracking-wider font-semibold">Integrity Record</span>
               </div>
               <div className="space-y-1.5 text-[11px] font-mono" style={{ color: 'var(--ink-soft)' }}>
