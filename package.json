@@ -10,6 +10,7 @@
     "lint": "oxlint"
   },
   "dependencies": {
+    "lightweight-charts": "^5.2.0",
     "next": "^16.2.10",
     "react": "^19.2.7",
     "react-dom": "^19.2.7"
