@@ -1,13 +1,35 @@
-import { useMemo } from 'react'
+import { useEffect, useState } from 'react'
 import { sampleDrafts } from '../data/theses.js'
-import { loadDrafts, relativeTime } from '../lib/drafts.js'
+import { deleteDraft, loadDrafts, relativeTime } from '../lib/drafts.js'
+import ConfirmModal from '../components/ConfirmModal.jsx'
 
 export default function Drafts({ navigate }) {
-  // Saved drafts (localStorage) first, then the sample set for context.
-  const drafts = useMemo(() => {
-    const saved = loadDrafts().map((d) => ({ ...d, lastEdited: relativeTime(d.savedAt) }))
-    return [...saved, ...sampleDrafts]
-  }, [])
+  // Saved drafts (localStorage) held in state so deleting one re-renders. Sample
+  // drafts follow for context and are read-only (no savedAt, not stored).
+  const [saved, setSaved] = useState([])
+  useEffect(() => { setSaved(loadDrafts()) }, [])
+
+  // The draft awaiting delete confirmation (null when the dialog is closed).
+  const [pendingDelete, setPendingDelete] = useState(null)
+  useEffect(() => {
+    document.body.classList.toggle('modal-open', pendingDelete != null)
+    return () => document.body.classList.remove('modal-open')
+  }, [pendingDelete])
+
+  const requestDelete = (e, draft) => {
+    e.stopPropagation() // don't open the editor when deleting
+    setPendingDelete(draft)
+  }
+
+  const confirmDelete = () => {
+    if (pendingDelete) setSaved(deleteDraft(pendingDelete.id))
+    setPendingDelete(null)
+  }
+
+  const drafts = [
+    ...saved.map((d) => ({ ...d, lastEdited: relativeTime(d.savedAt) })),
+    ...sampleDrafts,
+  ]
 
   return (
     <>
@@ -54,13 +76,34 @@ export default function Drafts({ navigate }) {
 
                 <div className="pt-4 border-t flex items-center justify-between" style={{ borderColor: 'var(--border)' }}>
                   <span className="text-[10px] font-mono uppercase tracking-wider" style={{ color: 'var(--muted)' }}>Draft</span>
-                  <button className="text-xs font-medium flex items-center gap-1" style={{ background: 'transparent', border: 'none', cursor: 'pointer' }}>Continue <i className="icon-arrow-right text-xs"></i></button>
+                  <div className="flex items-center gap-3">
+                    {d.savedAt && (
+                      <button
+                        onClick={(e) => requestDelete(e, d)}
+                        title="Delete draft"
+                        className="text-xs font-medium flex items-center gap-1"
+                        style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--bear)' }}
+                      >
+                        <i className="icon-trash-2 text-xs"></i> Delete
+                      </button>
+                    )}
+                    <button className="text-xs font-medium flex items-center gap-1" style={{ background: 'transparent', border: 'none', cursor: 'pointer' }}>Continue <i className="icon-arrow-right text-xs"></i></button>
+                  </div>
                 </div>
               </div>
             )
           })}
         </div>
       </div>
+
+      <ConfirmModal
+        open={pendingDelete != null}
+        title="Delete this draft?"
+        message={pendingDelete ? `"${pendingDelete.title}" will be permanently removed. This cannot be undone.` : ''}
+        confirmLabel="Delete draft"
+        onConfirm={confirmDelete}
+        onClose={() => setPendingDelete(null)}
+      />
     </>
   )
 }

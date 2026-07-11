@@ -35,6 +35,18 @@ export const loadDrafts = () => {
   }
 }
 
+// Remove a saved draft by id. Returns the remaining drafts (newest first), or
+// the current list unchanged if storage is unavailable.
+export const deleteDraft = (id) => {
+  const next = loadDrafts().filter((d) => d.id !== id)
+  try {
+    localStorage.setItem(KEY, JSON.stringify(next))
+  } catch {
+    // Storage unavailable — nothing removed.
+  }
+  return next
+}
+
 // Persist a draft built by the editor. Reuses the row for a given id if present
 // (re-saving an open draft), otherwise appends a new one. Returns the saved row.
 export const saveDraft = (thesis, id) => {
