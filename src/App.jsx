@@ -1,122 +1,81 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
-import './App.css'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import Sidebar from './components/Sidebar.jsx'
+import Toast from './components/Toast.jsx'
+import PublishModal from './components/PublishModal.jsx'
+import Dashboard from './views/Dashboard.jsx'
+import Editor from './views/Editor.jsx'
+import ThesisDetail from './views/ThesisDetail.jsx'
+import Leaderboard from './views/Leaderboard.jsx'
+import Profile from './views/Profile.jsx'
+import MyTheses from './views/MyTheses.jsx'
+import Drafts from './views/Drafts.jsx'
+import Triggers from './views/Triggers.jsx'
+import Discover from './views/Discover.jsx'
 
-function App() {
-  const [count, setCount] = useState(0)
+export default function App() {
+  const [view, setView] = useState('dashboard')
+  const [toast, setToast] = useState('')
+  const [publishOpen, setPublishOpen] = useState(false)
+  const toastTimer = useRef(null)
+
+  const navigate = useCallback((next) => {
+    setView(next)
+    window.scrollTo(0, 0)
+  }, [])
+
+  const showToast = useCallback((msg) => {
+    setToast(msg)
+    clearTimeout(toastTimer.current)
+    toastTimer.current = setTimeout(() => setToast(''), 3200)
+  }, [])
+
+  useEffect(() => {
+    const onKeyDown = (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'n') {
+        e.preventDefault()
+        navigate('editor')
+      }
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [navigate])
+
+  useEffect(() => {
+    document.body.classList.toggle('modal-open', publishOpen)
+  }, [publishOpen])
+
+  const confirmPublish = () => {
+    setPublishOpen(false)
+    showToast('Thesis published. Entry locked at $905.40 · Timestamp sealed.')
+    setTimeout(() => navigate('thesis'), 800)
+  }
+
+  const renderView = () => {
+    switch (view) {
+      case 'dashboard': return <Dashboard navigate={navigate} />
+      case 'editor': return <Editor navigate={navigate} showToast={showToast} onOpenPublish={() => setPublishOpen(true)} />
+      case 'thesis': return <ThesisDetail navigate={navigate} />
+      case 'leaderboard': return <Leaderboard navigate={navigate} />
+      case 'profile': return <Profile navigate={navigate} />
+      case 'mytheses': return <MyTheses navigate={navigate} />
+      case 'drafts': return <Drafts navigate={navigate} />
+      case 'triggers': return <Triggers navigate={navigate} />
+      case 'discover': return <Discover navigate={navigate} />
+      default: return <Dashboard navigate={navigate} />
+    }
+  }
 
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.jsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
+    <div id="app" className="relative z-10 flex min-h-screen">
+      <Sidebar view={view} navigate={navigate} />
+      <main className="flex-1 min-w-0">
+        <section key={view} className="view view-enter">
+          {renderView()}
+        </section>
+      </main>
 
-      <div className="ticks"></div>
-
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
-
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
+      <PublishModal open={publishOpen} onClose={() => setPublishOpen(false)} onConfirm={confirmPublish} />
+      <Toast message={toast} />
+    </div>
   )
 }
-
-export default App
