@@ -2,43 +2,43 @@
 export const sampleTheses = [
   {
     id: 1, title: "ASML: The Monopoly Below the Surface", ticker: "ASML", company: "ASML Holding",
-    side: "bull", sector: "Semiconductors", publishDate: "Mar 14, 2024", daysActive: 237,
+    side: "bull", sector: "Semiconductors", publishDate: "Mar 14, 2024", entryDate: "2024-03-14", daysActive: 237,
     entry: 905.40, current: 1042.18, ret: 15.1, status: "active", updates: 3,
     triggers: [{ c: "Gross margin < 45%", s: "clear" }, { c: "China rev > 25%", s: "warning" }]
   },
   {
     id: 2, title: "Salesforce: The Multiple Compression Has Further to Run", ticker: "CRM", company: "Salesforce Inc.",
-    side: "bear", sector: "Software", publishDate: "Jan 8, 2024", daysActive: 303,
+    side: "bear", sector: "Software", publishDate: "Jan 8, 2024", entryDate: "2024-01-08", daysActive: 303,
     entry: 298.40, current: 273.20, ret: 8.4, status: "active", updates: 4,
     triggers: [{ c: "FCF margin > 35%", s: "clear" }, { c: "Revenue growth > 12%", s: "clear" }]
   },
   {
     id: 3, title: "CrowdStrike: Pricing Power in Security", ticker: "CRWD", company: "CrowdStrike Holdings",
-    side: "bull", sector: "Cybersecurity", publishDate: "Apr 3, 2024", daysActive: 187,
+    side: "bull", sector: "Cybersecurity", publishDate: "Apr 3, 2024", entryDate: "2024-04-03", daysActive: 187,
     entry: 312.50, current: 383.40, ret: 22.7, status: "active", updates: 2,
     triggers: [{ c: "ARR growth < 25%", s: "clear" }, { c: "Gross margin < 70%", s: "clear" }]
   },
   {
     id: 4, title: "Chevron: Energy Transition Mispriced", ticker: "CVX", company: "Chevron Corporation",
-    side: "bull", sector: "Energy", publishDate: "Feb 19, 2024", daysActive: 250,
+    side: "bull", sector: "Energy", publishDate: "Feb 19, 2024", entryDate: "2024-02-19", daysActive: 250,
     entry: 152.30, current: 161.80, ret: 6.2, status: "active", updates: 1,
     triggers: [{ c: "Dividend cut", s: "clear" }, { c: "Oil < $60/bbl", s: "clear" }]
   },
   {
     id: 5, title: "Snap: The Attention Recession", ticker: "SNAP", company: "Snap Inc.",
-    side: "bear", sector: "Consumer", publishDate: "Dec 2, 2023", daysActive: 340,
+    side: "bear", sector: "Consumer", publishDate: "Dec 2, 2023", entryDate: "2023-12-02", daysActive: 340,
     entry: 14.80, current: 11.20, ret: 24.3, status: "active", updates: 5,
     triggers: [{ c: "DAU growth < 2%", s: "breached" }, { c: "ARPU growth > 10%", s: "clear" }]
   },
   {
     id: 6, title: "Cintas: The Silent Compounder at Fair Value", ticker: "CTAS", company: "Cintas Corporation",
-    side: "bull", sector: "Consumer", publishDate: "May 12, 2024", daysActive: 148,
+    side: "bull", sector: "Consumer", publishDate: "May 12, 2024", entryDate: "2024-05-12", daysActive: 148,
     entry: 678.00, current: 707.20, ret: 4.3, status: "active", updates: 1,
     triggers: [{ c: "Gross margin < 45%", s: "clear" }]
   },
   {
     id: 7, title: "Nvidia: Pricing Out the Picks-and-Shovels Premium", ticker: "NVDA", company: "NVIDIA Corporation",
-    side: "bull", sector: "Semiconductors", publishDate: "Aug 22, 2023", daysActive: 436,
+    side: "bull", sector: "Semiconductors", publishDate: "Aug 22, 2023", entryDate: "2023-08-22", daysActive: 436,
     entry: 432.10, current: 887.40, ret: 105.3, status: "closed", closeDate: "Oct 15, 2024", updates: 6,
     triggers: [{ c: "Data center rev growth < 30%", s: "clear" }]
   }

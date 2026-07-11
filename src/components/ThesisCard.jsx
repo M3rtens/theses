@@ -1,8 +1,15 @@
 import Sparkline from './Sparkline.jsx'
+import { fmtPrice } from '../lib/format.js'
 
-export default function ThesisCard({ thesis: t, variant = 'dashboard', onOpen }) {
-  const retClass = t.ret >= 0 ? 'ret-pos' : 'ret-neg'
-  const sign = t.ret >= 0 ? '+' : '−'
+export default function ThesisCard({ thesis: t, variant = 'dashboard', onOpen, live }) {
+  // Prefer live native-currency figures; fall back to the static locked numbers.
+  const entry = live?.entry ?? t.entry
+  const current = live?.current ?? t.current
+  const ret = live?.ret ?? t.ret
+  const currency = live?.currency ?? 'USD'
+
+  const retClass = ret >= 0 ? 'ret-pos' : 'ret-neg'
+  const sign = ret >= 0 ? '+' : '−'
   const sideClass = t.side === 'bull' ? 'side-bull' : 'side-bear'
   const sideLabel = t.side === 'bull' ? 'BULL' : 'BEAR'
 
@@ -36,8 +43,8 @@ export default function ThesisCard({ thesis: t, variant = 'dashboard', onOpen })
           <Sparkline thesis={t} />
         </div>
         <div className="flex-shrink-0 text-right w-24">
-          <div className={`font-mono text-lg font-semibold ${retClass}`}>{sign}{Math.abs(t.ret).toFixed(1)}%</div>
-          <div className="text-[10px] font-mono" style={{ color: 'var(--muted)' }}>${t.entry} → ${t.current}</div>
+          <div className={`font-mono text-lg font-semibold ${retClass}`}>{sign}{Math.abs(ret).toFixed(1)}%</div>
+          <div className="text-[10px] font-mono" style={{ color: 'var(--muted)' }}>{fmtPrice(entry, currency)} → {fmtPrice(current, currency)}</div>
         </div>
       </div>
     </div>

@@ -1,3 +1,12 @@
+import { useEffect, useState } from 'react'
+
+const WATCHLIST = [
+  { symbol: 'ASML', fallback: 15.1 },
+  { symbol: 'CRM', fallback: -8.4 },
+  { symbol: 'CRWD', fallback: 22.7 },
+  { symbol: 'CVX', fallback: 6.2 },
+]
+
 const NAV_MAIN = [
   { view: 'dashboard', icon: 'lucide-layout-dashboard', label: 'Dashboard' },
   { view: 'mytheses', icon: 'lucide-file-text', label: 'My Theses', count: '12' },
@@ -12,6 +21,22 @@ const NAV_COMMUNITY = [
 
 export default function Sidebar({ view, navigate }) {
   const navClass = (v) => `nav-item ${view === v ? 'active' : ''} cursor-pointer flex items-center gap-2.5 py-1`
+
+  const [quotes, setQuotes] = useState({})
+  useEffect(() => {
+    let cancelled = false
+    const symbols = WATCHLIST.map((w) => w.symbol).join(',')
+    fetch(`/api/quotes?symbols=${symbols}`)
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
+      .then((rows) => {
+        if (cancelled || !Array.isArray(rows)) return
+        const map = {}
+        rows.forEach((q) => { map[q.symbol] = q })
+        setQuotes(map)
+      })
+      .catch(() => { /* keep fallback values */ })
+    return () => { cancelled = true }
+  }, [])
 
   return (
     <aside className="w-60 border-r flex flex-col shrink-0" style={{ borderColor: 'var(--border)', background: 'var(--bg)' }}>
@@ -62,10 +87,18 @@ export default function Sidebar({ view, navigate }) {
 
         <div className="text-[10px] font-mono uppercase tracking-wider mb-3 mt-7" style={{ color: 'var(--faint)' }}>Watchlist</div>
         <ul className="space-y-1.5 text-[13px]" style={{ color: 'var(--ink-soft)' }}>
-          <li className="flex items-center justify-between"><span className="font-mono">ASML</span><span className="num-mono text-[11px] ret-pos">+15.1%</span></li>
-          <li className="flex items-center justify-between"><span className="font-mono">CRM</span><span className="num-mono text-[11px] ret-neg">−8.4%</span></li>
-          <li className="flex items-center justify-between"><span className="font-mono">CRWD</span><span className="num-mono text-[11px] ret-pos">+22.7%</span></li>
-          <li className="flex items-center justify-between"><span className="font-mono">CVX</span><span className="num-mono text-[11px] ret-pos">+6.2%</span></li>
+          {WATCHLIST.map((w) => {
+            const pct = quotes[w.symbol]?.changePercent
+            const val = pct == null ? w.fallback : pct
+            const cls = val >= 0 ? 'ret-pos' : 'ret-neg'
+            const sign = val >= 0 ? '+' : '−'
+            return (
+              <li key={w.symbol} className="flex items-center justify-between">
+                <span className="font-mono">{w.symbol}</span>
+                <span className={`num-mono text-[11px] ${cls}`}>{sign}{Math.abs(val).toFixed(1)}%</span>
+              </li>
+            )
+          })}
         </ul>
       </nav>
 

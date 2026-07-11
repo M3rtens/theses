@@ -10,6 +10,7 @@ import {
   ColorType,
   CrosshairMode,
 } from 'lightweight-charts'
+import { currencySymbol } from '../lib/format.js'
 
 const ENTRY = 905.40
 const DAYS = 237
@@ -41,12 +42,22 @@ function buildSeries() {
   return { price, bench }
 }
 
-export default function PriceChart() {
+export default function PriceChart({ history, benchmark, entry, currency }) {
   const containerRef = useRef(null)
 
   useEffect(() => {
     const container = containerRef.current
     if (!container) return
+
+    // Prefer real data passed in; otherwise fall back to the seeded series so
+    // the chart still renders standalone or if the fetch failed.
+    const fallback = buildSeries()
+    const hasReal = Array.isArray(history) && history.length > 0
+    const priceData = hasReal ? history : fallback.price
+    const benchData = Array.isArray(benchmark) && benchmark.length > 0
+      ? benchmark
+      : (hasReal ? [] : fallback.bench)
+    const entryVal = entry ?? priceData[0].value
 
     const chart = createChart(container, {
       autoSize: true,
@@ -70,18 +81,18 @@ export default function PriceChart() {
       },
     })
 
-    const { price, bench } = buildSeries()
-
     // Benchmark (S&P 500) — dashed, faint, drawn underneath.
-    const benchSeries = chart.addSeries(LineSeries, {
-      color: '#B8B5AC',
-      lineWidth: 1,
-      lineStyle: LineStyle.Dashed,
-      priceLineVisible: false,
-      lastValueVisible: false,
-      crosshairMarkerVisible: false,
-    })
-    benchSeries.setData(bench)
+    if (benchData.length) {
+      const benchSeries = chart.addSeries(LineSeries, {
+        color: '#B8B5AC',
+        lineWidth: 1,
+        lineStyle: LineStyle.Dashed,
+        priceLineVisible: false,
+        lastValueVisible: false,
+        crosshairMarkerVisible: false,
+      })
+      benchSeries.setData(benchData)
+    }
 
     // ASML price — dark line with a subtle green area fill.
     const priceSeries = chart.addSeries(AreaSeries, {
@@ -92,11 +103,11 @@ export default function PriceChart() {
       priceLineVisible: false,
       lastValueVisible: true,
     })
-    priceSeries.setData(price)
+    priceSeries.setData(priceData)
 
     // Locked entry price reference line.
     priceSeries.createPriceLine({
-      price: ENTRY,
+      price: entryVal,
       color: '#1A1A17',
       lineWidth: 1,
       lineStyle: LineStyle.Dashed,
@@ -104,16 +115,17 @@ export default function PriceChart() {
       title: 'ENTRY',
     })
 
-    const last = price[price.length - 1]
+    const cur = currencySymbol(currency)
+    const last = priceData[priceData.length - 1]
     createSeriesMarkers(priceSeries, [
-      { time: price[0].time, position: 'belowBar', color: '#1A1A17', shape: 'circle', text: `ENTRY $${ENTRY.toFixed(0)}` },
-      { time: last.time, position: 'aboveBar', color: '#2D5F3F', shape: 'circle', text: `NOW $${last.value.toFixed(0)}` },
+      { time: priceData[0].time, position: 'belowBar', color: '#1A1A17', shape: 'circle', text: `ENTRY ${cur}${entryVal.toFixed(0)}` },
+      { time: last.time, position: 'aboveBar', color: '#2D5F3F', shape: 'circle', text: `NOW ${cur}${last.value.toFixed(0)}` },
     ])
 
     chart.timeScale().fitContent()
 
     return () => chart.remove()
-  }, [])
+  }, [history, benchmark, entry, currency])
 
   return <div ref={containerRef} className="relative" style={{ height: 320, width: '100%' }} />
 }

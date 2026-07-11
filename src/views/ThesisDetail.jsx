@@ -1,6 +1,50 @@
+import { useEffect, useState } from 'react'
 import PriceChart from '../components/PriceChart.jsx'
+import { fmtPrice } from '../lib/format.js'
+
+// Shown while the live fetch is in flight or if it fails, so the view is
+// never blank. Mirrors the original prototype numbers.
+const FALLBACK = {
+  company: 'ASML Holding N.V.',
+  sector: 'Semiconductors',
+  entry: 905.40, current: 1042.18, high: 1108.30, low: 872.10,
+  ret: 15.1, spReturn: 6.2, alpha: 8.9,
+  financials: {
+    revenue: '€27.3B', grossProfit: '€13.8B', operatingIncome: '€8.9B', netIncome: '€7.0B',
+    operatingMargin: '32.6%', cash: '€5.4B', totalDebt: '€2.1B', netCash: '+€3.3B',
+  },
+}
 
 export default function ThesisDetail({ navigate }) {
+  const [data, setData] = useState(null)
+
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/thesis?symbol=ASML&from=2024-03-14')
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
+      .then((d) => { if (!cancelled && d && !d.error) setData(d) })
+      .catch(() => { /* keep fallback values */ })
+    return () => { cancelled = true }
+  }, [])
+
+  const d = data || {}
+  const company = d.company ?? FALLBACK.company
+  const sector = d.sector ?? FALLBACK.sector
+  const entry = d.entry ?? FALLBACK.entry
+  const current = d.current ?? FALLBACK.current
+  const high = d.high ?? FALLBACK.high
+  const low = d.low ?? FALLBACK.low
+  const ret = d.ret ?? FALLBACK.ret
+  const spReturn = d.spReturn ?? FALLBACK.spReturn
+  const alpha = d.alpha ?? FALLBACK.alpha
+  const currency = d.currency ?? 'USD'
+  const fin = (k) => (d.financials && d.financials[k]) || FALLBACK.financials[k]
+
+  const retClass = ret >= 0 ? 'ret-pos' : 'ret-neg'
+  const retSign = ret >= 0 ? '+' : '−'
+  const spSign = spReturn >= 0 ? '+' : '−'
+  const alphaSign = alpha >= 0 ? '+' : '−'
+
   return (
     <>
       <header className="px-12 pt-6 pb-5 border-b" style={{ borderColor: 'var(--border)' }}>
@@ -21,9 +65,9 @@ export default function ThesisDetail({ navigate }) {
           <div className="flex-1">
             <div className="flex items-center gap-3 mb-2">
               <span className="font-mono text-sm font-semibold">ASML</span>
-              <span className="text-xs" style={{ color: 'var(--muted)' }}>ASML Holding N.V.</span>
+              <span className="text-xs" style={{ color: 'var(--muted)' }}>{company}</span>
               <span className="text-xs" style={{ color: 'var(--muted)' }}>·</span>
-              <span className="text-xs" style={{ color: 'var(--muted)' }}>Semiconductors</span>
+              <span className="text-xs" style={{ color: 'var(--muted)' }}>{sector}</span>
               <span className="side-bull text-[10px] font-mono font-semibold px-2 py-0.5 rounded">BULL · LONG</span>
             </div>
             <h1 className="font-serif text-4xl font-medium tracking-tight leading-tight">ASML: The Monopoly Below the Surface</h1>
@@ -39,8 +83,8 @@ export default function ThesisDetail({ navigate }) {
           </div>
           <div className="text-right shrink-0">
             <div className="text-[10px] font-mono uppercase tracking-wider" style={{ color: 'var(--muted)' }}>Total Return</div>
-            <div className="font-serif text-5xl font-medium ret-pos">+15.1%</div>
-            <div className="text-xs font-mono mt-1" style={{ color: 'var(--ink-soft)' }}>vs S&amp;P +6.2% · Alpha +8.9pp</div>
+            <div className={`font-serif text-5xl font-medium ${retClass}`}>{retSign}{Math.abs(ret).toFixed(1)}%</div>
+            <div className="text-xs font-mono mt-1" style={{ color: 'var(--ink-soft)' }}>vs S&amp;P {spSign}{Math.abs(spReturn).toFixed(1)}% · Alpha {alphaSign}{Math.abs(alpha).toFixed(1)}pp</div>
           </div>
         </div>
       </header>
@@ -67,24 +111,24 @@ export default function ThesisDetail({ navigate }) {
               </div>
             </div>
           </div>
-          <PriceChart />
+          <PriceChart history={d.history} benchmark={d.benchmark} entry={entry} currency={currency} />
           <div className="flex items-center justify-between mt-4 pt-4 border-t text-xs" style={{ borderColor: 'var(--border)' }}>
             <div className="flex items-center gap-6">
               <div>
                 <span style={{ color: 'var(--muted)' }}>Entry: </span>
-                <span className="font-mono font-semibold">$905.40</span>
+                <span className="font-mono font-semibold">{fmtPrice(entry, currency)}</span>
               </div>
               <div>
                 <span style={{ color: 'var(--muted)' }}>Current: </span>
-                <span className="font-mono font-semibold">$1,042.18</span>
+                <span className="font-mono font-semibold">{fmtPrice(current, currency)}</span>
               </div>
               <div>
                 <span style={{ color: 'var(--muted)' }}>High: </span>
-                <span className="font-mono">$1,108.30</span>
+                <span className="font-mono">{fmtPrice(high, currency)}</span>
               </div>
               <div>
                 <span style={{ color: 'var(--muted)' }}>Low: </span>
-                <span className="font-mono">$872.10</span>
+                <span className="font-mono">{fmtPrice(low, currency)}</span>
               </div>
             </div>
             <span className="font-mono pulse-dot" style={{ color: 'var(--bull)' }}>● LIVE · 16:32 EST</span>
@@ -196,6 +240,31 @@ export default function ThesisDetail({ navigate }) {
             </div>
 
             <div>
+              <h4 className="font-serif text-base font-medium mb-3">Financials</h4>
+              <div className="grid grid-cols-1 gap-4">
+                <div className="p-4 border rounded-md" style={{ borderColor: 'var(--border)', background: 'white' }}>
+                  <div className="text-[10px] font-mono uppercase tracking-wider mb-3" style={{ color: 'var(--muted)' }}>Income Statement Highlights</div>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between"><span style={{ color: 'var(--ink-soft)' }}>Revenue (TTM)</span><span className="font-mono">{fin('revenue')}</span></div>
+                    <div className="flex justify-between"><span style={{ color: 'var(--ink-soft)' }}>Gross Profit</span><span className="font-mono">{fin('grossProfit')}</span></div>
+                    <div className="flex justify-between"><span style={{ color: 'var(--ink-soft)' }}>Operating Income</span><span className="font-mono">{fin('operatingIncome')}</span></div>
+                    <div className="flex justify-between"><span style={{ color: 'var(--ink-soft)' }}>Net Income</span><span className="font-mono">{fin('netIncome')}</span></div>
+                    <div className="flex justify-between border-t pt-2 mt-2" style={{ borderColor: 'var(--border)' }}><span style={{ color: 'var(--ink-soft)' }}>Operating Margin</span><span className="font-mono font-semibold">{fin('operatingMargin')}</span></div>
+                  </div>
+                </div>
+                <div className="p-4 border rounded-md" style={{ borderColor: 'var(--border)', background: 'white' }}>
+                  <div className="text-[10px] font-mono uppercase tracking-wider mb-3" style={{ color: 'var(--muted)' }}>Balance Sheet Strength</div>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between"><span style={{ color: 'var(--ink-soft)' }}>Cash &amp; Equivalents</span><span className="font-mono">{fin('cash')}</span></div>
+                    <div className="flex justify-between"><span style={{ color: 'var(--ink-soft)' }}>Total Debt</span><span className="font-mono">{fin('totalDebt')}</span></div>
+                    <div className="flex justify-between border-t pt-2 mt-2" style={{ borderColor: 'var(--border)' }}><span style={{ color: 'var(--ink-soft)' }}>Net Cash Position</span><span className="font-mono ret-pos">{fin('netCash')}</span></div>
+                  </div>
+                </div>
+              </div>
+              <p className="text-[10px] font-mono mt-2" style={{ color: 'var(--faint)' }}>Live via Yahoo Finance · TTM figures in reporting currency</p>
+            </div>
+
+            <div>
               <h4 className="font-serif text-base font-medium mb-3">Thesis Controls</h4>
               <div className="space-y-2">
                 <button className="w-full text-left p-3 border rounded text-xs hover:bg-gray-50" style={{ borderColor: 'var(--border)', background: 'transparent', cursor: 'pointer' }}>
@@ -237,7 +306,7 @@ export default function ThesisDetail({ navigate }) {
               <div className="space-y-1.5 text-[11px] font-mono" style={{ color: 'var(--ink-soft)' }}>
                 <div className="flex justify-between"><span>Created:</span><span>Mar 14, 2024 · 09:31:02</span></div>
                 <div className="flex justify-between"><span>Published:</span><span>Mar 14, 2024 · 09:32:14</span></div>
-                <div className="flex justify-between"><span>Entry locked:</span><span>$905.40 @ 09:32:14</span></div>
+                <div className="flex justify-between"><span>Entry locked:</span><span>{fmtPrice(entry, currency)} @ 09:32:14</span></div>
                 <div className="flex justify-between"><span>Edits to body:</span><span>0 permitted</span></div>
                 <div className="flex justify-between"><span>Deletions:</span><span>0 permitted</span></div>
               </div>

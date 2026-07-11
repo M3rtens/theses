@@ -1,6 +1,9 @@
 import { sampleTheses } from '../data/theses.js'
+import { useLiveTheses } from '../lib/useLiveTheses.js'
+import { fmtPrice } from '../lib/format.js'
 
 export default function MyTheses({ navigate }) {
+  const live = useLiveTheses(sampleTheses)
   return (
     <>
       <header className="px-12 pt-8 pb-6 border-b" style={{ borderColor: 'var(--border)' }}>
@@ -47,8 +50,13 @@ export default function MyTheses({ navigate }) {
             </thead>
             <tbody>
               {sampleTheses.map(t => {
-                const retClass = t.ret >= 0 ? 'ret-pos' : 'ret-neg'
-                const sign = t.ret >= 0 ? '+' : '−'
+                const l = live[t.ticker]
+                const entry = l?.entry ?? t.entry
+                const current = l?.current ?? t.current
+                const ret = l?.ret ?? t.ret
+                const currency = l?.currency ?? 'USD'
+                const retClass = ret >= 0 ? 'ret-pos' : 'ret-neg'
+                const sign = ret >= 0 ? '+' : '−'
                 const sideClass = t.side === 'bull' ? 'side-bull' : 'side-bear'
                 const sideLabel = t.side === 'bull' ? 'BULL' : 'BEAR'
                 return (
@@ -61,9 +69,9 @@ export default function MyTheses({ navigate }) {
                         ? <span className="text-[10px] font-mono px-1.5 py-0.5 rounded" style={{ background: 'var(--bg-warm)', color: 'var(--ink-soft)' }}>CLOSED</span>
                         : <span className="text-[10px] font-mono px-1.5 py-0.5 rounded" style={{ background: 'var(--bull-soft)', color: 'var(--bull)' }}>ACTIVE</span>}
                     </td>
-                    <td className="px-4 py-4 text-right font-mono text-sm" style={{ color: 'var(--ink-soft)' }}>${t.entry.toFixed(2)}</td>
-                    <td className="px-4 py-4 text-right font-mono text-sm" style={{ color: 'var(--ink-soft)' }}>${t.current.toFixed(2)}</td>
-                    <td className={`px-4 py-4 text-right font-mono text-sm font-semibold ${retClass}`}>{sign}{Math.abs(t.ret).toFixed(1)}%</td>
+                    <td className="px-4 py-4 text-right font-mono text-sm" style={{ color: 'var(--ink-soft)' }}>{fmtPrice(entry, currency)}</td>
+                    <td className="px-4 py-4 text-right font-mono text-sm" style={{ color: 'var(--ink-soft)' }}>{fmtPrice(current, currency)}</td>
+                    <td className={`px-4 py-4 text-right font-mono text-sm font-semibold ${retClass}`}>{sign}{Math.abs(ret).toFixed(1)}%</td>
                     <td className="px-4 py-4">
                       <div className="flex gap-1.5">
                         {t.triggers.map((trig, i) => {

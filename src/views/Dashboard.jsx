@@ -1,7 +1,11 @@
 import ThesisCard from '../components/ThesisCard.jsx'
 import { sampleTheses } from '../data/theses.js'
+import { useLiveTheses } from '../lib/useLiveTheses.js'
+
+const ACTIVE = sampleTheses.slice(0, 5)
 
 export default function Dashboard({ navigate }) {
+  const live = useLiveTheses(ACTIVE)
   return (
     <>
       <header className="px-12 pt-8 pb-6 flex items-end justify-between border-b" style={{ borderColor: 'var(--border)' }}>
@@ -54,8 +58,8 @@ export default function Dashboard({ navigate }) {
               <button onClick={() => navigate('mytheses')} className="text-xs font-mono uppercase tracking-wider" style={{ color: 'var(--muted)', background: 'transparent', border: 'none', cursor: 'pointer' }}>View all →</button>
             </div>
             <div className="space-y-3">
-              {sampleTheses.slice(0, 5).map(t => (
-                <ThesisCard key={t.id} thesis={t} variant="dashboard" onOpen={() => navigate('thesis')} />
+              {ACTIVE.map(t => (
+                <ThesisCard key={t.id} thesis={t} variant="dashboard" live={live[t.ticker]} onOpen={() => navigate('thesis')} />
               ))}
             </div>
           </div>
