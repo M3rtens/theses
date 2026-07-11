@@ -13,11 +13,14 @@ import MyTheses from './views/MyTheses.jsx'
 import Drafts from './views/Drafts.jsx'
 import Triggers from './views/Triggers.jsx'
 import Discover from './views/Discover.jsx'
+import { fmtPrice } from './lib/format.js'
 
 export default function App() {
   const [view, setView] = useState('dashboard')
   const [toast, setToast] = useState('')
   const [publishOpen, setPublishOpen] = useState(false)
+  const [pendingDraft, setPendingDraft] = useState(null)
+  const [publishing, setPublishing] = useState(false)
   const toastTimer = useRef(null)
 
   const navigate = useCallback((next) => {
@@ -46,16 +49,38 @@ export default function App() {
     document.body.classList.toggle('modal-open', publishOpen)
   }, [publishOpen])
 
-  const confirmPublish = () => {
-    setPublishOpen(false)
-    showToast('Thesis published. Entry locked at $905.40 · Timestamp sealed.')
-    setTimeout(() => navigate('thesis'), 800)
+  const openPublish = useCallback((draft) => {
+    setPendingDraft(draft)
+    setPublishOpen(true)
+  }, [])
+
+  const confirmPublish = async () => {
+    if (!pendingDraft || publishing) return
+    setPublishing(true)
+    showToast('Publishing · locking entry price from exchange feed…')
+    try {
+      const res = await fetch('/api/theses', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(pendingDraft),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`)
+      setPublishOpen(false)
+      setPendingDraft(null)
+      showToast(`Thesis published. Entry locked at ${fmtPrice(data.entry, data.currency)} · Timestamp sealed.`)
+      setTimeout(() => navigate('mytheses'), 800)
+    } catch (e) {
+      showToast(`Publish failed: ${e.message}`)
+    } finally {
+      setPublishing(false)
+    }
   }
 
   const renderView = () => {
     switch (view) {
       case 'dashboard': return <Dashboard navigate={navigate} />
-      case 'editor': return <Editor navigate={navigate} showToast={showToast} onOpenPublish={() => setPublishOpen(true)} />
+      case 'editor': return <Editor navigate={navigate} showToast={showToast} onOpenPublish={openPublish} />
       case 'thesis': return <ThesisDetail navigate={navigate} />
       case 'leaderboard': return <Leaderboard navigate={navigate} />
       case 'profile': return <Profile navigate={navigate} />
@@ -76,7 +101,7 @@ export default function App() {
         </section>
       </main>
 
-      <PublishModal open={publishOpen} onClose={() => setPublishOpen(false)} onConfirm={confirmPublish} />
+      <PublishModal open={publishOpen} publishing={publishing} draft={pendingDraft} onClose={() => setPublishOpen(false)} onConfirm={confirmPublish} />
       <Toast message={toast} />
     </div>
   )

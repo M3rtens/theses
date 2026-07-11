@@ -141,6 +141,53 @@ export async function getThesisData(inputSymbol, from) {
   }
 }
 
+// Free-text security search for the editor's ticker picker. Returns tradeable
+// listings (equities, ETFs, funds) with the fields the UI needs to display and
+// preselect a company. Keeps Yahoo's own exchange-suffixed symbols so a foreign
+// listing can be chosen directly and priced in its native currency.
+export async function searchSecurities(query) {
+  const q = String(query || '').trim()
+  if (q.length < 1) return []
+  const TRADEABLE = new Set(['EQUITY', 'ETF', 'MUTUALFUND', 'INDEX'])
+  let res
+  try {
+    res = await yf.search(q, { quotesCount: 10, newsCount: 0 })
+  } catch {
+    return []
+  }
+  return (res?.quotes || [])
+    .filter((q2) => q2.isYahooFinance && q2.symbol && TRADEABLE.has(q2.quoteType))
+    .map((q2) => ({
+      symbol: q2.symbol,
+      name: q2.longname || q2.shortname || q2.symbol,
+      exchange: q2.exchDisp || q2.exchange || null,
+      type: q2.typeDisp || q2.quoteType || null,
+      sector: q2.sectorDisp || q2.sector || null,
+      industry: q2.industryDisp || q2.industry || null,
+    }))
+}
+
+// Snapshot a symbol's live price in its native currency, for sealing a thesis's
+// entry at publication. Resolves to the primary listing first so the locked price
+// (and everything derived from it) is in the company's own currency, never a US line.
+export async function lockEntryPrice(inputSymbol) {
+  const symbol = await resolvePrimarySymbol(inputSymbol)
+  const [quote, summary] = await Promise.all([
+    yf.quote(symbol),
+    yf.quoteSummary(symbol, { modules: ['assetProfile', 'price'] }).catch(() => null),
+  ])
+  const price = quote?.regularMarketPrice
+  if (price == null) throw new Error(`No live price for ${inputSymbol}`)
+  return {
+    resolvedSymbol: symbol,
+    currency: quote?.currency || 'USD',
+    price: Number(price.toFixed(2)),
+    company: quote?.longName || quote?.shortName || summary?.price?.longName || symbol,
+    exchange: quote?.fullExchangeName || quote?.exchange || null,
+    sector: summary?.assetProfile?.industry || summary?.assetProfile?.sector || null,
+  }
+}
+
 // Native entry/current/return for a batch of thesis cards. Each item carries the
 // requested symbol and the publication date; we resolve the primary listing, read
 // the close on (or just after) the entry date, and pair it with the live price so

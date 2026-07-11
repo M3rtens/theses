@@ -1,0 +1,37 @@
+[
+  {
+    "title": "test",
+    "ticker": "ASML",
+    "company": "ASML Holding N.V.",
+    "side": "bull",
+    "sector": "Semiconductors",
+    "publishDate": "Jul 11, 2026",
+    "entryDate": "2026-07-11",
+    "daysActive": 0,
+    "entry": 1569,
+    "current": 1569,
+    "ret": 0,
+    "status": "active",
+    "updates": 0,
+    "triggers": [
+      {
+        "c": "Gross margin falls below 45%",
+        "s": "clear"
+      },
+      {
+        "c": "EUV shipment count < 40 units annually",
+        "s": "clear"
+      },
+      {
+        "c": "China revenue exceeds 25% of total",
+        "s": "warning"
+      }
+    ],
+    "currency": "EUR",
+    "resolvedSymbol": "ASML.AS",
+    "exchange": "Amsterdam",
+    "body": "\n  <h1>The Monopoly Below the Surface</h1>\n  <p>ASML is the only company on earth capable of manufacturing extreme ultraviolet (EUV) lithography systems. This isn't a near-monopoly — it's a single-source chokepoint in the most strategic supply chain of the 21st century.</p>\n  <h2>The Core Argument</h2>\n  <p>The market prices ASML as a cyclical semiconductor equipment vendor. It is, in reality, a <strong>structural monopoly</strong> with three reinforcing moats:</p>\n  <ul>\n    <li><strong>Technical impossibility of competition:</strong> Zeiss is the only optics partner capable of the required precision, and Zeiss is contractually locked to ASML.</li>\n    <li><strong>20+ year development cycles:</strong> EUV took 17 years and €6B+ to commercialize. Next-generation High-NA is already shipping.</li>\n    <li><strong>Captive customer base:</strong> TSMC, Samsung, and Intel cannot produce leading-edge chips without ASML's machines.</li>\n  </ul>\n  <h2>Why the Market is Wrong</h2>\n  <p>Current multiples discount a cyclical downturn in 2025–2026. <em>They miss that the backlog has structurally re-rated.</em> The order book now extends through 2029, with non-cancellable deposits representing 41% of order value — up from 18% in 2021.</p>\n  <blockquote>\"If you want to bet against the entire semiconductor industry, short ASML. If you want to own the semiconductor industry, own ASML.\" — Analyst note, Morgan Stanley</blockquote>\n  <h2>Path to $1,400</h2>\n  <p>At 32x forward earnings — a discount to its 5-year average of 38x — ASML reaches $1,400 by 2026 under conservative assumptions:</p>\n  <ol>\n    <li>EUV shipment volume grows 18% CAGR through 2028</li>\n    <li>Service revenue compounds at 12% (high-margin, recurring)</li>\n    <li>High-NA pricing premium of 35% materializes</li>\n  </ol>\n  <p>The downside is protected by a non-cancellable backlog that exceeds two years of revenue.</p>\n",
+    "createdAt": "2026-07-11T11:25:44.675Z",
+    "id": 1
+  }
+]

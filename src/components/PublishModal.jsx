@@ -1,22 +1,25 @@
 import { useState } from 'react'
 
-const POINTS = [
-  { ok: true, title: 'Entry price will be locked at current market', detail: 'ASML @ $905.40 · recorded from exchange feed · timestamp Mar 14, 2024 09:32:14 EST' },
+const points = (ticker) => [
+  { ok: true, title: 'Entry price will be locked at current market', detail: `${ticker} · recorded live from the exchange feed in its native currency at publication.` },
   { ok: true, title: 'Performance tracking begins immediately', detail: 'Price chart, return %, and trigger monitoring activate on publish.' },
   { ok: false, title: 'Thesis body cannot be edited', detail: 'You may append timestamped updates only. The original text is sealed.' },
   { ok: false, title: 'Thesis cannot be deleted', detail: 'Even if the thesis loses, it remains on your permanent record. This is the point.' },
   { ok: false, title: 'Entry timestamp cannot be backdated', detail: 'Future close dates, once set, are also non-changeable.' },
 ]
 
-export default function PublishModal({ open, onClose, onConfirm }) {
+export default function PublishModal({ open, publishing, draft, onClose, onConfirm }) {
   const [confirmed, setConfirmed] = useState(false)
 
   const close = () => {
+    if (publishing) return
     setConfirmed(false)
     onClose()
   }
 
   if (!open) return null
+
+  const POINTS = points(draft?.ticker || 'This position')
 
   return (
     <div className="fixed inset-0 z-50 modal-backdrop flex items-center justify-center p-8">
@@ -46,8 +49,8 @@ export default function PublishModal({ open, onClose, onConfirm }) {
             <label className="flex items-center gap-2 text-xs" style={{ color: 'var(--ink-soft)' }}>
               <input type="checkbox" checked={confirmed} onChange={(e) => setConfirmed(e.target.checked)} /> I understand this is irreversible
             </label>
-            <button disabled={!confirmed} onClick={onConfirm} className="btn-primary text-sm px-5 py-2 rounded-md flex items-center gap-2">
-              <i className="lucide-lock text-xs"></i> Publish &amp; Lock
+            <button disabled={!confirmed || publishing} onClick={onConfirm} className="btn-primary text-sm px-5 py-2 rounded-md flex items-center gap-2">
+              <i className="lucide-lock text-xs"></i> {publishing ? 'Publishing…' : 'Publish & Lock'}
             </button>
           </div>
         </div>

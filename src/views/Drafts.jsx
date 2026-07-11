@@ -1,6 +1,14 @@
+import { useMemo } from 'react'
 import { sampleDrafts } from '../data/theses.js'
+import { loadDrafts, relativeTime } from '../lib/drafts.js'
 
 export default function Drafts({ navigate }) {
+  // Saved drafts (localStorage) first, then the sample set for context.
+  const drafts = useMemo(() => {
+    const saved = loadDrafts().map((d) => ({ ...d, lastEdited: relativeTime(d.savedAt) }))
+    return [...saved, ...sampleDrafts]
+  }, [])
+
   return (
     <>
       <header className="px-12 pt-8 pb-6 border-b" style={{ borderColor: 'var(--border)' }}>
@@ -25,7 +33,7 @@ export default function Drafts({ navigate }) {
 
       <div className="px-12 py-8">
         <div className="grid grid-cols-2 gap-4">
-          {sampleDrafts.map(d => {
+          {drafts.map(d => {
             const sideClass = d.side === 'bull' ? 'side-bull' : 'side-bear'
             const sideLabel = d.side === 'bull' ? 'BULL' : 'BEAR'
             return (

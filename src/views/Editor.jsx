@@ -1,4 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
+import SecuritySearch from '../components/SecuritySearch.jsx'
+import { fmtPrice } from '../lib/format.js'
+import { saveDraft as persistDraft } from '../lib/drafts.js'
 
 const INITIAL_TRIGGERS = [
   { id: 1, condition: 'Gross margin falls below 45%', metric: 'Gross Margin', threshold: '45%', current: '50.8%', status: 'clear' },
@@ -47,9 +50,52 @@ export default function Editor({ navigate, showToast, onOpenPublish }) {
   const [triggers, setTriggers] = useState(INITIAL_TRIGGERS)
   const [slash, setSlash] = useState(null) // { x, y }
   const [dragging, setDragging] = useState(false)
+  const [security, setSecurity] = useState({ symbol: 'ASML', name: 'ASML Holding N.V.', exchange: 'AMS' })
+  const [preview, setPreview] = useState(null)     // live price/financials for the selected security
+  const [previewLoading, setPreviewLoading] = useState(false)
 
   const editorRef = useRef(null)
+  const titleRef = useRef(null)
+  const sectorRef = useRef(null)
   const dragCounter = useRef(0)
+
+  // Whenever the chosen security changes, pull its live price + financials so the
+  // Entry Price Lock and Financials panels preview exactly what will be sealed.
+  useEffect(() => {
+    const symbol = security?.symbol
+    if (!symbol) { setPreview(null); return }
+    let cancelled = false
+    setPreviewLoading(true)
+    setPreview(null)
+    fetch(`/api/thesis?symbol=${encodeURIComponent(symbol)}`)
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
+      .then((d) => { if (!cancelled && d && !d.error) setPreview(d) })
+      .catch(() => { if (!cancelled) setPreview(null) })
+      .finally(() => { if (!cancelled) setPreviewLoading(false) })
+    return () => { cancelled = true }
+  }, [security?.symbol])
+
+  const fin = (k) => preview?.financials?.[k] ?? '—'
+
+  // Gather the editor's fields into the payload the create endpoint expects.
+  const buildThesis = () => ({
+    title: titleRef.current?.value?.trim() || '',
+    ticker: security?.symbol?.trim().toUpperCase() || '',
+    company: security?.name?.trim() || '',
+    sector: sectorRef.current?.value || '',
+    side,
+    body: editorRef.current?.innerHTML || '',
+    triggers: triggers.map((t) => ({ c: t.condition, s: t.status })),
+  })
+
+  const openPublish = () => {
+    const draft = buildThesis()
+    if (!draft.title || !draft.ticker) {
+      showToast('Add a title and select a security before publishing.')
+      return
+    }
+    onOpenPublish(draft)
+  }
 
   // Seed the contenteditable body once on mount.
   useEffect(() => {
@@ -132,7 +178,19 @@ export default function Editor({ navigate, showToast, onOpenPublish }) {
   const removeTrigger = (id) => setTriggers(prev => prev.filter(t => t.id !== id))
   const updateTrigger = (id, value) => setTriggers(prev => prev.map(t => t.id === id ? { ...t, condition: value } : t))
 
-  const saveDraft = () => showToast('Draft saved locally · ' + new Date().toLocaleTimeString())
+  const saveDraft = () => {
+    const draft = buildThesis()
+    if (!draft.title && !draft.ticker) {
+      showToast('Add a title or select a security before saving.')
+      return
+    }
+    const saved = persistDraft(draft)
+    if (!saved) {
+      showToast('Could not save draft — local storage is unavailable.')
+      return
+    }
+    showToast('Draft saved · ' + new Date().toLocaleTimeString())
+  }
 
   const sideBox = (active, color) => active
     ? { borderColor: `var(--${color})`, background: `var(--${color}-soft)` }
@@ -154,7 +212,7 @@ export default function Editor({ navigate, showToast, onOpenPublish }) {
         </div>
         <div className="flex items-center gap-2">
           <button onClick={saveDraft} className="btn-secondary text-sm px-4 py-2 rounded-md">Save Draft</button>
-          <button onClick={onOpenPublish} className="btn-primary text-sm px-4 py-2 rounded-md flex items-center gap-2">
+          <button onClick={openPublish} className="btn-primary text-sm px-4 py-2 rounded-md flex items-center gap-2">
             <i className="lucide-lock text-xs"></i> Publish &amp; Lock
           </button>
         </div>
@@ -162,6 +220,7 @@ export default function Editor({ navigate, showToast, onOpenPublish }) {
 
       <div className="px-12 py-8 max-w-4xl">
         <input
+          ref={titleRef}
           type="text"
           placeholder="Give your thesis a clear, declarative title…"
           className="input-clean font-serif text-4xl font-medium placeholder:text-[color:var(--faint)] mb-2"
@@ -170,16 +229,12 @@ export default function Editor({ navigate, showToast, onOpenPublish }) {
 
         <div className="flex flex-wrap items-center gap-3 mb-6 pb-6 border-b" style={{ borderColor: 'var(--border)' }}>
           <div className="flex items-center gap-2">
-            <span className="text-[10px] font-mono uppercase tracking-wider" style={{ color: 'var(--muted)' }}>Ticker</span>
-            <input type="text" defaultValue="ASML" className="font-mono text-sm font-semibold px-2 py-1 input-bordered rounded w-20 text-center" />
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] font-mono uppercase tracking-wider" style={{ color: 'var(--muted)' }}>Company</span>
-            <input type="text" defaultValue="ASML Holding N.V." className="text-sm px-2 py-1 input-bordered rounded" style={{ width: '200px' }} />
+            <span className="text-[10px] font-mono uppercase tracking-wider" style={{ color: 'var(--muted)' }}>Security</span>
+            <SecuritySearch value={security} onSelect={setSecurity} />
           </div>
           <div className="flex items-center gap-2">
             <span className="text-[10px] font-mono uppercase tracking-wider" style={{ color: 'var(--muted)' }}>Sector</span>
-            <select className="text-sm px-2 py-1 input-bordered rounded" defaultValue="Semiconductors">
+            <select ref={sectorRef} className="text-sm px-2 py-1 input-bordered rounded" defaultValue="Semiconductors">
               <option>Semiconductors</option>
               <option>Software</option>
               <option>Energy</option>
@@ -223,8 +278,12 @@ export default function Editor({ navigate, showToast, onOpenPublish }) {
                   <div className="font-mono text-xs mt-1" style={{ color: 'var(--muted)' }}>Cannot be backdated · System-locked</div>
                 </div>
                 <div className="text-right">
-                  <div className="font-mono text-2xl font-semibold">$905.40</div>
-                  <div className="text-[10px] font-mono" style={{ color: 'var(--muted)' }}>ASML · NYSE</div>
+                  <div className="font-mono text-2xl font-semibold">
+                    {previewLoading ? '…' : preview ? fmtPrice(preview.current, preview.currency) : '—'}
+                  </div>
+                  <div className="text-[10px] font-mono" style={{ color: 'var(--muted)' }}>
+                    {security ? `${security.symbol}${security.exchange ? ` · ${security.exchange}` : ''}` : 'No security selected'}
+                  </div>
                 </div>
               </div>
             </div>
@@ -363,24 +422,25 @@ export default function Editor({ navigate, showToast, onOpenPublish }) {
             <div className="p-5 border rounded-md" style={{ borderColor: 'var(--border)', background: 'white' }}>
               <div className="text-[10px] font-mono uppercase tracking-wider mb-3" style={{ color: 'var(--muted)' }}>Income Statement Highlights</div>
               <div className="space-y-2 text-sm">
-                <div className="flex justify-between"><span style={{ color: 'var(--ink-soft)' }}>Revenue (TTM)</span><span className="font-mono">€27.3B</span></div>
-                <div className="flex justify-between"><span style={{ color: 'var(--ink-soft)' }}>Gross Profit</span><span className="font-mono">€13.8B</span></div>
-                <div className="flex justify-between"><span style={{ color: 'var(--ink-soft)' }}>Operating Income</span><span className="font-mono">€8.9B</span></div>
-                <div className="flex justify-between"><span style={{ color: 'var(--ink-soft)' }}>Net Income</span><span className="font-mono">€7.0B</span></div>
-                <div className="flex justify-between border-t pt-2 mt-2" style={{ borderColor: 'var(--border)' }}><span style={{ color: 'var(--ink-soft)' }}>Operating Margin</span><span className="font-mono font-semibold">32.6%</span></div>
+                <div className="flex justify-between"><span style={{ color: 'var(--ink-soft)' }}>Revenue (TTM)</span><span className="font-mono">{fin('revenue')}</span></div>
+                <div className="flex justify-between"><span style={{ color: 'var(--ink-soft)' }}>Gross Profit</span><span className="font-mono">{fin('grossProfit')}</span></div>
+                <div className="flex justify-between"><span style={{ color: 'var(--ink-soft)' }}>Operating Income</span><span className="font-mono">{fin('operatingIncome')}</span></div>
+                <div className="flex justify-between"><span style={{ color: 'var(--ink-soft)' }}>Net Income</span><span className="font-mono">{fin('netIncome')}</span></div>
+                <div className="flex justify-between border-t pt-2 mt-2" style={{ borderColor: 'var(--border)' }}><span style={{ color: 'var(--ink-soft)' }}>Operating Margin</span><span className="font-mono font-semibold">{fin('operatingMargin')}</span></div>
               </div>
             </div>
             <div className="p-5 border rounded-md" style={{ borderColor: 'var(--border)', background: 'white' }}>
               <div className="text-[10px] font-mono uppercase tracking-wider mb-3" style={{ color: 'var(--muted)' }}>Balance Sheet Strength</div>
               <div className="space-y-2 text-sm">
-                <div className="flex justify-between"><span style={{ color: 'var(--ink-soft)' }}>Cash &amp; Equivalents</span><span className="font-mono">€5.4B</span></div>
-                <div className="flex justify-between"><span style={{ color: 'var(--ink-soft)' }}>Total Debt</span><span className="font-mono">€2.1B</span></div>
-                <div className="flex justify-between"><span style={{ color: 'var(--ink-soft)' }}>Net Cash Position</span><span className="font-mono ret-pos">+€3.3B</span></div>
-                <div className="flex justify-between"><span style={{ color: 'var(--ink-soft)' }}>Backlog (non-cancellable)</span><span className="font-mono">€36B</span></div>
-                <div className="flex justify-between border-t pt-2 mt-2" style={{ borderColor: 'var(--border)' }}><span style={{ color: 'var(--ink-soft)' }}>Backlog / Annual Rev</span><span className="font-mono font-semibold">2.3x</span></div>
+                <div className="flex justify-between"><span style={{ color: 'var(--ink-soft)' }}>Cash &amp; Equivalents</span><span className="font-mono">{fin('cash')}</span></div>
+                <div className="flex justify-between"><span style={{ color: 'var(--ink-soft)' }}>Total Debt</span><span className="font-mono">{fin('totalDebt')}</span></div>
+                <div className="flex justify-between border-t pt-2 mt-2" style={{ borderColor: 'var(--border)' }}><span style={{ color: 'var(--ink-soft)' }}>Net Cash Position</span><span className={`font-mono ${String(fin('netCash')).startsWith('−') ? 'ret-neg' : 'ret-pos'}`}>{fin('netCash')}</span></div>
               </div>
             </div>
           </div>
+          <p className="text-[10px] font-mono mt-3" style={{ color: 'var(--faint)' }}>
+            {previewLoading ? 'Loading financials…' : preview ? 'Live via Yahoo Finance · TTM figures in reporting currency' : 'Select a security to load financials.'}
+          </p>
         </div>
 
         <div className={tabHidden('charts')}>

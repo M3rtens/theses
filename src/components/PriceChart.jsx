@@ -10,7 +10,7 @@ import {
   ColorType,
   CrosshairMode,
 } from 'lightweight-charts'
-import { currencySymbol } from '../lib/format.js'
+import { currencySymbol, isPence } from '../lib/format.js'
 
 const ENTRY = 905.40
 const DAYS = 237
@@ -53,11 +53,15 @@ export default function PriceChart({ history, benchmark, entry, currency }) {
     // the chart still renders standalone or if the fetch failed.
     const fallback = buildSeries()
     const hasReal = Array.isArray(history) && history.length > 0
-    const priceData = hasReal ? history : fallback.price
-    const benchData = Array.isArray(benchmark) && benchmark.length > 0
-      ? benchmark
-      : (hasReal ? [] : fallback.bench)
-    const entryVal = entry ?? priceData[0].value
+    // Pence-quoted lines (GBp) are scaled to pounds so the axis, entry line and
+    // markers all read in £ — consistent with the price labels elsewhere.
+    const scale = hasReal && isPence(currency) ? 0.01 : 1
+    const rescale = (pts) => (scale === 1 ? pts : pts.map((p) => ({ ...p, value: p.value * scale })))
+    const priceData = rescale(hasReal ? history : fallback.price)
+    const benchData = rescale(
+      Array.isArray(benchmark) && benchmark.length > 0 ? benchmark : (hasReal ? [] : fallback.bench),
+    )
+    const entryVal = entry != null ? entry * scale : priceData[0].value
 
     const chart = createChart(container, {
       autoSize: true,

@@ -1,9 +1,12 @@
 import { sampleTheses } from '../data/theses.js'
 import { useLiveTheses } from '../lib/useLiveTheses.js'
+import { useStoredTheses } from '../lib/useStoredTheses.js'
 import { fmtPrice } from '../lib/format.js'
 
 export default function MyTheses({ navigate }) {
-  const live = useLiveTheses(sampleTheses)
+  const stored = useStoredTheses()
+  const allTheses = [...stored, ...sampleTheses]
+  const live = useLiveTheses(allTheses)
   return (
     <>
       <header className="px-12 pt-8 pb-6 border-b" style={{ borderColor: 'var(--border)' }}>
@@ -49,7 +52,7 @@ export default function MyTheses({ navigate }) {
               </tr>
             </thead>
             <tbody>
-              {sampleTheses.map(t => {
+              {allTheses.map(t => {
                 const l = live[t.ticker]
                 const entry = l?.entry ?? t.entry
                 const current = l?.current ?? t.current
@@ -60,7 +63,7 @@ export default function MyTheses({ navigate }) {
                 const sideClass = t.side === 'bull' ? 'side-bull' : 'side-bear'
                 const sideLabel = t.side === 'bull' ? 'BULL' : 'BEAR'
                 return (
-                  <tr key={t.id} className="lb-row border-b last:border-b-0 cursor-pointer" style={{ borderColor: 'var(--border)' }} onClick={() => navigate('thesis')}>
+                  <tr key={`${t.createdAt ? 'u' : 's'}-${t.id}`} className="lb-row border-b last:border-b-0 cursor-pointer" style={{ borderColor: 'var(--border)' }} onClick={() => navigate('thesis')}>
                     <td className="px-4 py-4 font-mono text-sm font-semibold">{t.ticker}</td>
                     <td className="px-4 py-4 text-sm font-medium max-w-md truncate">{t.title}</td>
                     <td className="px-4 py-4"><span className={`${sideClass} text-[9px] font-mono font-semibold px-1.5 py-0.5 rounded`}>{sideLabel}</span></td>
