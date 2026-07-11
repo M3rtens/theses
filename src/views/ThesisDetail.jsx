@@ -10,25 +10,75 @@ const TRIGGER_META = {
   breached: { label: '✕ BREACHED', cls: 'trigger-breached' },
 }
 
+// Chart timeframes. 'pub' (default) shows history since the thesis was published;
+// the others show a trailing window / all available history, with the publication
+// point still marked on the line.
+const RANGES = [
+  { key: 'pub', label: 'Since Pub' },
+  { key: '1Y', label: '1Y' },
+  { key: '5Y', label: '5Y' },
+  { key: 'ALL', label: 'All' },
+]
+
+// The `from` date to request for a given range. Trailing windows are measured
+// from today; 'ALL' reaches back far enough for Yahoo to return full history.
+function rangeFrom(range, entryDate) {
+  if (range === 'pub') return entryDate
+  if (range === 'ALL') return '1970-01-01'
+  const now = new Date()
+  now.setFullYear(now.getFullYear() - (range === '5Y' ? 5 : 1))
+  return now.toISOString().slice(0, 10)
+}
+
 export default function ThesisDetail({ navigate, thesis }) {
   // The thesis to show comes from navigation; fall back to the first sample so a
   // direct load (no selection) still renders something rather than a blank page.
   const base = thesis || sampleTheses[0]
 
+  const symbol = base.ticker || 'ASML'
+  const entryDate = base.entryDate || '2024-03-14'
+
+  // Thesis stats (entry, current, financials, and the since-publication history)
+  // are always anchored at the publication date, independent of the chart range.
   const [data, setData] = useState(null)
   useEffect(() => {
     let cancelled = false
     setData(null)
-    const symbol = base.ticker || 'ASML'
-    const from = base.entryDate || '2024-03-14'
-    fetch(`/api/thesis?symbol=${encodeURIComponent(symbol)}&from=${from}`)
+    fetch(`/api/thesis?symbol=${encodeURIComponent(symbol)}&from=${entryDate}`)
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
       .then((d) => { if (!cancelled && d && !d.error) setData(d) })
       .catch(() => { /* keep sealed/static values */ })
     return () => { cancelled = true }
-  }, [base.ticker, base.entryDate])
+  }, [symbol, entryDate])
 
   const d = data || {}
+
+  // Chart timeframe. For non-'pub' ranges we fetch a wider history separately so
+  // the stats above stay anchored at publication.
+  const [range, setRange] = useState('ALL')
+  const [ranged, setRanged] = useState(null)
+  useEffect(() => {
+    if (range === 'pub') { setRanged(null); return }
+    let cancelled = false
+    setRanged(null)
+    const from = rangeFrom(range, entryDate)
+    fetch(`/api/thesis?symbol=${encodeURIComponent(symbol)}&from=${from}`)
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
+      .then((res) => { if (!cancelled && res && !res.error) setRanged({ history: res.history, benchmark: res.benchmark }) })
+      .catch(() => { /* keep the since-publication history */ })
+    return () => { cancelled = true }
+  }, [range, symbol, entryDate])
+
+  // The series for the selected range. For non-'pub' ranges we wait for that
+  // range's own fetch rather than falling back to the since-publication series —
+  // otherwise the chart would briefly show "Since Pub" then jump to the range.
+  const chartHistory = range === 'pub' ? d.history : ranged?.history
+  const chartBench = range === 'pub' ? d.benchmark : ranged?.benchmark
+  const chartReady = Array.isArray(chartHistory) && chartHistory.length > 0
+  // Only mark publication when it actually falls inside the shown window; a short
+  // trailing window (e.g. 1Y) may begin after an older thesis was published.
+  const publishInWindow = entryDate >= rangeFrom(range, entryDate)
+  const publishTime = publishInWindow ? entryDate : null
 
   // A user-published thesis stores its entry sealed in native currency; never let
   // the live fetch overwrite it. Samples carry no native entry, so use the live one.
@@ -107,25 +157,40 @@ export default function ThesisDetail({ navigate, thesis }) {
         <div className="mb-8 p-6 border rounded-md" style={{ borderColor: 'var(--border)', background: 'white' }}>
           <div className="flex items-baseline justify-between mb-4">
             <div>
-              <h3 className="font-serif text-lg font-medium">Price Since Publication</h3>
+              <h3 className="font-serif text-lg font-medium">Price History</h3>
               <p className="text-xs mt-0.5" style={{ color: 'var(--muted)' }}>Entry marked at publication timestamp · Cannot be retroactively edited</p>
             </div>
-            <div className="flex items-center gap-4 text-xs">
-              <div className="flex items-center gap-1.5">
-                <span className="inline-block w-3 h-px" style={{ background: 'var(--ink)' }}></span>
-                <span style={{ color: 'var(--ink-soft)' }}>{base.ticker}</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="inline-block w-3 h-px" style={{ background: 'var(--muted)', borderTop: '1px dashed var(--muted)' }}></span>
-                <span style={{ color: 'var(--ink-soft)' }}>S&amp;P 500</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="inline-block w-3 h-px" style={{ background: 'var(--ink)', borderTop: '1px dashed var(--ink)' }}></span>
-                <span style={{ color: 'var(--ink-soft)' }}>Entry</span>
-              </div>
+            <div className="flex items-center gap-1 p-1 border rounded-md" style={{ borderColor: 'var(--border)', background: 'white' }}>
+              {RANGES.map((r) => (
+                <button
+                  key={r.key}
+                  onClick={() => setRange(r.key)}
+                  className={`lb-filter text-xs px-2.5 py-1 rounded ${range === r.key ? 'active' : ''}`}
+                >
+                  {r.label}
+                </button>
+              ))}
             </div>
           </div>
-          <PriceChart history={d.history} benchmark={d.benchmark} entry={entry} currency={currency} />
+          <div className="flex items-center gap-4 text-xs mb-3">
+            <div className="flex items-center gap-1.5">
+              <span className="inline-block w-3 h-px" style={{ background: 'var(--ink)' }}></span>
+              <span style={{ color: 'var(--ink-soft)' }}>{base.ticker}</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="inline-block w-3 h-px" style={{ background: 'var(--muted)', borderTop: '1px dashed var(--muted)' }}></span>
+              <span style={{ color: 'var(--ink-soft)' }}>S&amp;P 500</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="inline-block w-3 h-px" style={{ background: 'var(--ink)', borderTop: '1px dashed var(--ink)' }}></span>
+              <span style={{ color: 'var(--ink-soft)' }}>Entry</span>
+            </div>
+          </div>
+          {chartReady
+            ? <PriceChart history={chartHistory} benchmark={chartBench} entry={entry} currency={currency} publishTime={publishTime} />
+            : <div className="flex items-center justify-center" style={{ height: 320 }}>
+                <span className="text-xs font-mono" style={{ color: 'var(--muted)' }}>Loading chart…</span>
+              </div>}
           <div className="flex items-center justify-between mt-4 pt-4 border-t text-xs" style={{ borderColor: 'var(--border)' }}>
             <div className="flex items-center gap-6">
               <div>

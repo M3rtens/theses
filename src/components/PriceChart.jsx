@@ -9,6 +9,7 @@ import {
   LineStyle,
   ColorType,
   CrosshairMode,
+  PriceScaleMode,
 } from 'lightweight-charts'
 import { currencySymbol, isPence } from '../lib/format.js'
 
@@ -42,7 +43,11 @@ function buildSeries() {
   return { price, bench }
 }
 
-export default function PriceChart({ history, benchmark, entry, currency }) {
+// Compare a lightweight-charts {year,month,day} to a 'YYYY-MM-DD' string.
+const timeToNum = (t) => t.year * 10000 + t.month * 100 + t.day
+const isoToNum = (iso) => Number(iso.slice(0, 4)) * 10000 + Number(iso.slice(5, 7)) * 100 + Number(iso.slice(8, 10))
+
+export default function PriceChart({ history, benchmark, entry, currency, publishTime }) {
   const containerRef = useRef(null)
 
   useEffect(() => {
@@ -76,7 +81,10 @@ export default function PriceChart({ history, benchmark, entry, currency }) {
         vertLines: { visible: false },
         horzLines: { color: '#E8E6DF', style: LineStyle.Dashed },
       },
-      rightPriceScale: { borderColor: '#E8E6DF' },
+      // Logarithmic so the benchmark stays visible over long windows: a stock
+      // that compounds far more than the index would otherwise flatten the index
+      // line against the axis on a linear scale.
+      rightPriceScale: { borderColor: '#E8E6DF', mode: PriceScaleMode.Logarithmic },
       timeScale: { borderColor: '#E8E6DF', timeVisible: false, secondsVisible: false, fixLeftEdge: true, fixRightEdge: true },
       crosshair: {
         mode: CrosshairMode.Normal,
@@ -121,15 +129,29 @@ export default function PriceChart({ history, benchmark, entry, currency }) {
 
     const cur = currencySymbol(currency)
     const last = priceData[priceData.length - 1]
-    createSeriesMarkers(priceSeries, [
-      { time: priceData[0].time, position: 'belowBar', color: '#1A1A17', shape: 'circle', text: `ENTRY ${cur}${entryVal.toFixed(0)}` },
-      { time: last.time, position: 'aboveBar', color: '#2D5F3F', shape: 'circle', text: `NOW ${cur}${last.value.toFixed(0)}` },
-    ])
+
+    // Mark where the thesis was published. When a window extends before
+    // publication (5Y/All), the marker lands mid-chart rather than at the edge.
+    // publishTime is null when publication falls outside the window (the caller
+    // guards this), so no marker is drawn in that case.
+    const pubNum = publishTime ? isoToNum(publishTime) : null
+    const pubIdx = pubNum == null ? -1 : priceData.findIndex((p) => timeToNum(p.time) >= pubNum)
+    const pubBar = pubIdx === -1 ? null : priceData[pubIdx]
+
+    const markers = []
+    if (pubBar) {
+      markers.push({ time: pubBar.time, position: 'belowBar', color: '#1A1A17', shape: 'arrowUp', text: `PUBLISHED ${cur}${entryVal.toFixed(0)}` })
+    }
+    // Add a NOW marker unless it would sit on the same bar as publication.
+    if (!pubBar || last.time !== pubBar.time) {
+      markers.push({ time: last.time, position: 'aboveBar', color: '#2D5F3F', shape: 'circle', text: `NOW ${cur}${last.value.toFixed(0)}` })
+    }
+    createSeriesMarkers(priceSeries, markers)
 
     chart.timeScale().fitContent()
 
     return () => chart.remove()
-  }, [history, benchmark, entry, currency])
+  }, [history, benchmark, entry, currency, publishTime])
 
   return <div ref={containerRef} className="relative" style={{ height: 320, width: '100%' }} />
 }

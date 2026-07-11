@@ -170,9 +170,13 @@ export async function getThesisData(inputSymbol, from) {
   const ret = ((current - entry) / entry) * 100
 
   // Rebase the benchmark to the entry price so it overlays on the same scale.
+  // Trim it to the security's own history first: the benchmark (e.g. S&P 500)
+  // usually reaches further back than the stock, and without this the chart's
+  // time axis would start at the benchmark's inception rather than the security's.
   let benchmark = []
   let spReturn = null
-  const bRows = (chartB?.quotes || []).filter((q) => q.close != null)
+  const secStart = new Date(rows[0].date).getTime()
+  const bRows = (chartB?.quotes || []).filter((q) => q.close != null && new Date(q.date).getTime() >= secStart)
   if (bRows.length) {
     const spFirst = bRows[0].close
     benchmark = bRows.map((q) => ({ time: toTime(q.date), value: Number((entry * (q.close / spFirst)).toFixed(2)) }))
