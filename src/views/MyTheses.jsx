@@ -99,7 +99,7 @@ export default function MyTheses({ navigate }) {
                 const sideClass = t.side === 'bull' ? 'side-bull' : 'side-bear'
                 const sideLabel = t.side === 'bull' ? 'BULL' : 'BEAR'
                 return (
-                  <tr key={`${t.createdAt ? 'u' : 's'}-${t.id}`} className="lb-row border-b last:border-b-0 cursor-pointer" style={{ borderColor: 'var(--border)' }} onClick={() => navigate('thesis')}>
+                  <tr key={`${t.createdAt ? 'u' : 's'}-${t.id}`} className="lb-row border-b last:border-b-0 cursor-pointer" style={{ borderColor: 'var(--border)' }} onClick={() => navigate('thesis', t)}>
                     <td className="px-4 py-4 font-mono text-sm font-semibold">{t.ticker}</td>
                     <td className="px-4 py-4 text-sm font-medium max-w-md truncate">{t.title}</td>
                     <td className="px-4 py-4"><span className={`${sideClass} text-[9px] font-mono font-semibold px-1.5 py-0.5 rounded`}>{sideLabel}</span></td>

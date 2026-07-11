@@ -75,7 +75,7 @@ export default function Dashboard({ navigate }) {
             </div>
             <div className="space-y-3">
               {active.map(t => (
-                <ThesisCard key={`${t.createdAt ? 'u' : 's'}-${t.id}`} thesis={t} variant="dashboard" live={live[t.ticker]} onOpen={() => navigate('thesis')} />
+                <ThesisCard key={`${t.createdAt ? 'u' : 's'}-${t.id}`} thesis={t} variant="dashboard" live={live[t.ticker]} onOpen={() => navigate('thesis', t)} />
               ))}
             </div>
           </div>
@@ -93,7 +93,7 @@ export default function Dashboard({ navigate }) {
                     <span className="text-[10px] font-mono" style={{ color: 'var(--bear)' }}>BREACHED</span>
                   </div>
                   <p className="text-sm leading-snug">DAU growth fell below 2% for second consecutive quarter. Invalidation condition met.</p>
-                  <button onClick={() => navigate('thesis')} className="text-xs font-medium mt-2 underline" style={{ color: 'var(--bear)', background: 'transparent', border: 'none', cursor: 'pointer' }}>Review thesis →</button>
+                  <button onClick={() => navigate('thesis', allTheses.find((t) => t.ticker === 'SNAP'))} className="text-xs font-medium mt-2 underline" style={{ color: 'var(--bear)', background: 'transparent', border: 'none', cursor: 'pointer' }}>Review thesis →</button>
                 </div>
                 <div className="p-4 border" style={{ borderColor: 'var(--warn)', background: 'var(--warn-soft)' }}>
                   <div className="flex items-start justify-between mb-1">
@@ -101,7 +101,7 @@ export default function Dashboard({ navigate }) {
                     <span className="text-[10px] font-mono" style={{ color: 'var(--warn)' }}>WARNING</span>
                   </div>
                   <p className="text-sm leading-snug">China revenue approaching 25% threshold. Currently at 21%.</p>
-                  <button onClick={() => navigate('thesis')} className="text-xs font-medium mt-2 underline" style={{ color: 'var(--warn)', background: 'transparent', border: 'none', cursor: 'pointer' }}>Review thesis →</button>
+                  <button onClick={() => navigate('thesis', allTheses.find((t) => t.ticker === 'ASML'))} className="text-xs font-medium mt-2 underline" style={{ color: 'var(--warn)', background: 'transparent', border: 'none', cursor: 'pointer' }}>Review thesis →</button>
                 </div>
               </div>
             </div>

@@ -1,49 +1,61 @@
 import { useEffect, useState } from 'react'
 import PriceChart from '../components/PriceChart.jsx'
+import { sampleTheses } from '../data/theses.js'
 import { fmtPrice } from '../lib/format.js'
 
-// Shown while the live fetch is in flight or if it fails, so the view is
-// never blank. Mirrors the original prototype numbers.
-const FALLBACK = {
-  company: 'ASML Holding N.V.',
-  sector: 'Semiconductors',
-  entry: 905.40, current: 1042.18, high: 1108.30, low: 872.10,
-  ret: 15.1, spReturn: 6.2, alpha: 8.9,
-  financials: {
-    revenue: '€27.3B', grossProfit: '€13.8B', operatingIncome: '€8.9B', netIncome: '€7.0B',
-    operatingMargin: '32.6%', cash: '€5.4B', totalDebt: '€2.1B', netCash: '+€3.3B',
-  },
+// Trigger status → label + CSS class used in the monitor cards.
+const TRIGGER_META = {
+  clear: { label: '● CLEAR', cls: 'trigger-clear' },
+  warning: { label: '▲ WARNING', cls: 'trigger-warning' },
+  breached: { label: '✕ BREACHED', cls: 'trigger-breached' },
 }
 
-export default function ThesisDetail({ navigate }) {
-  const [data, setData] = useState(null)
+export default function ThesisDetail({ navigate, thesis }) {
+  // The thesis to show comes from navigation; fall back to the first sample so a
+  // direct load (no selection) still renders something rather than a blank page.
+  const base = thesis || sampleTheses[0]
 
+  const [data, setData] = useState(null)
   useEffect(() => {
     let cancelled = false
-    fetch('/api/thesis?symbol=ASML&from=2024-03-14')
+    setData(null)
+    const symbol = base.ticker || 'ASML'
+    const from = base.entryDate || '2024-03-14'
+    fetch(`/api/thesis?symbol=${encodeURIComponent(symbol)}&from=${from}`)
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
       .then((d) => { if (!cancelled && d && !d.error) setData(d) })
-      .catch(() => { /* keep fallback values */ })
+      .catch(() => { /* keep sealed/static values */ })
     return () => { cancelled = true }
-  }, [])
+  }, [base.ticker, base.entryDate])
 
   const d = data || {}
-  const company = d.company ?? FALLBACK.company
-  const sector = d.sector ?? FALLBACK.sector
-  const entry = d.entry ?? FALLBACK.entry
-  const current = d.current ?? FALLBACK.current
-  const high = d.high ?? FALLBACK.high
-  const low = d.low ?? FALLBACK.low
-  const ret = d.ret ?? FALLBACK.ret
-  const spReturn = d.spReturn ?? FALLBACK.spReturn
-  const alpha = d.alpha ?? FALLBACK.alpha
-  const currency = d.currency ?? 'USD'
-  const fin = (k) => (d.financials && d.financials[k]) || FALLBACK.financials[k]
 
+  // A user-published thesis stores its entry sealed in native currency; never let
+  // the live fetch overwrite it. Samples carry no native entry, so use the live one.
+  const sealed = base.currency != null
+  const entry = sealed ? base.entry : (d.entry ?? base.entry)
+  const current = d.current ?? base.current
+  const currency = d.currency ?? base.currency ?? 'USD'
+  const high = d.high ?? current
+  const low = d.low ?? entry
+  // Derive return from the displayed entry + current (side-adjusted) so the figures
+  // agree; fall back to the stored return before the live price loads.
+  const ret = (d.current != null && entry)
+    ? Number(((base.side === 'bear' ? -1 : 1) * ((current - entry) / entry) * 100).toFixed(1))
+    : base.ret
+  const spReturn = d.spReturn ?? null
+  const alpha = d.alpha ?? null
+
+  const company = d.company ?? base.company ?? base.ticker
+  const sector = d.sector ?? base.sector ?? '—'
+  const fin = (k) => (d.financials && d.financials[k]) || '—'
+
+  const sideClass = base.side === 'bull' ? 'side-bull' : 'side-bear'
+  const sideLabel = base.side === 'bull' ? 'BULL · LONG' : 'BEAR · SHORT'
   const retClass = ret >= 0 ? 'ret-pos' : 'ret-neg'
   const retSign = ret >= 0 ? '+' : '−'
-  const spSign = spReturn >= 0 ? '+' : '−'
-  const alphaSign = alpha >= 0 ? '+' : '−'
+
+  const created = base.createdAt ? new Date(base.createdAt).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : base.publishDate
 
   return (
     <>
@@ -52,39 +64,41 @@ export default function ThesisDetail({ navigate }) {
           <div className="flex items-center gap-3 text-sm">
             <button onClick={() => navigate('dashboard')} className="hover:underline" style={{ color: 'var(--ink-soft)', background: 'transparent', border: 'none', cursor: 'pointer' }}>Dashboard</button>
             <span style={{ color: 'var(--faint)' }}>/</span>
-            <span style={{ color: 'var(--ink-soft)' }}>Active Theses</span>
+            <span style={{ color: 'var(--ink-soft)' }}>{base.status === 'closed' ? 'Closed Theses' : 'Active Theses'}</span>
             <span style={{ color: 'var(--faint)' }}>/</span>
-            <span className="font-mono">ASML</span>
+            <span className="font-mono">{base.ticker}</span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="seal"><i className="icon-fingerprint text-[11px]"></i> Locked Mar 14, 2024 · 09:32:14 EST</div>
+            <div className="seal"><i className="icon-fingerprint text-[11px]"></i> Locked {base.publishDate}</div>
           </div>
         </div>
 
         <div className="flex items-start justify-between gap-8">
           <div className="flex-1">
             <div className="flex items-center gap-3 mb-2">
-              <span className="font-mono text-sm font-semibold">ASML</span>
+              <span className="font-mono text-sm font-semibold">{base.ticker}</span>
               <span className="text-xs" style={{ color: 'var(--muted)' }}>{company}</span>
               <span className="text-xs" style={{ color: 'var(--muted)' }}>·</span>
               <span className="text-xs" style={{ color: 'var(--muted)' }}>{sector}</span>
-              <span className="side-bull text-[10px] font-mono font-semibold px-2 py-0.5 rounded">BULL · LONG</span>
+              <span className={`${sideClass} text-[10px] font-mono font-semibold px-2 py-0.5 rounded`}>{sideLabel}</span>
             </div>
-            <h1 className="font-serif text-4xl font-medium tracking-tight leading-tight">ASML: The Monopoly Below the Surface</h1>
+            <h1 className="font-serif text-4xl font-medium tracking-tight leading-tight">{base.title}</h1>
             <div className="flex items-center gap-4 mt-3 text-xs" style={{ color: 'var(--muted)' }}>
               <span>By <span style={{ color: 'var(--ink)', fontWeight: 500 }}>Elena Vance</span></span>
               <span>·</span>
-              <span className="font-mono">Published Mar 14, 2024</span>
+              <span className="font-mono">Published {base.publishDate}</span>
               <span>·</span>
-              <span>3 updates</span>
+              <span>{base.updates || 0} update{base.updates === 1 ? '' : 's'}</span>
               <span>·</span>
-              <span className="font-mono">237 days active</span>
+              <span className="font-mono">{base.daysActive ?? 0} days active</span>
             </div>
           </div>
           <div className="text-right shrink-0">
             <div className="text-[10px] font-mono uppercase tracking-wider" style={{ color: 'var(--muted)' }}>Total Return</div>
             <div className={`font-serif text-5xl font-medium ${retClass}`}>{retSign}{Math.abs(ret).toFixed(1)}%</div>
-            <div className="text-xs font-mono mt-1" style={{ color: 'var(--ink-soft)' }}>vs S&amp;P {spSign}{Math.abs(spReturn).toFixed(1)}% · Alpha {alphaSign}{Math.abs(alpha).toFixed(1)}pp</div>
+            <div className="text-xs font-mono mt-1" style={{ color: 'var(--ink-soft)' }}>
+              vs S&amp;P {spReturn == null ? '—' : `${spReturn >= 0 ? '+' : '−'}${Math.abs(spReturn).toFixed(1)}%`} · Alpha {alpha == null ? '—' : `${alpha >= 0 ? '+' : '−'}${Math.abs(alpha).toFixed(1)}pp`}
+            </div>
           </div>
         </div>
       </header>
@@ -99,7 +113,7 @@ export default function ThesisDetail({ navigate }) {
             <div className="flex items-center gap-4 text-xs">
               <div className="flex items-center gap-1.5">
                 <span className="inline-block w-3 h-px" style={{ background: 'var(--ink)' }}></span>
-                <span style={{ color: 'var(--ink-soft)' }}>ASML</span>
+                <span style={{ color: 'var(--ink-soft)' }}>{base.ticker}</span>
               </div>
               <div className="flex items-center gap-1.5">
                 <span className="inline-block w-3 h-px" style={{ background: 'var(--muted)', borderTop: '1px dashed var(--muted)' }}></span>
@@ -131,34 +145,17 @@ export default function ThesisDetail({ navigate }) {
                 <span className="font-mono">{fmtPrice(low, currency)}</span>
               </div>
             </div>
-            <span className="font-mono pulse-dot" style={{ color: 'var(--bull)' }}>● LIVE · 16:32 EST</span>
+            <span className="font-mono pulse-dot" style={{ color: 'var(--bull)' }}>● LIVE</span>
           </div>
         </div>
 
         <div className="grid grid-cols-3 gap-8">
           <div className="col-span-2">
-            <article className="font-serif text-[17px] leading-[1.75]" style={{ color: 'var(--ink)' }}>
-              <h1 className="text-3xl font-medium mb-4">The Monopoly Below the Surface</h1>
-              <p className="mb-4">ASML is the only company on earth capable of manufacturing extreme ultraviolet (EUV) lithography systems. This isn't a near-monopoly — it's a single-source chokepoint in the most strategic supply chain of the 21st century.</p>
-              <h2 className="text-xl font-medium mt-6 mb-3">The Core Argument</h2>
-              <p className="mb-4">The market prices ASML as a cyclical semiconductor equipment vendor. It is, in reality, a <strong>structural monopoly</strong> with three reinforcing moats:</p>
-              <ul className="list-disc pl-6 mb-4 space-y-1">
-                <li><strong>Technical impossibility of competition:</strong> Zeiss is the only optics partner capable of the required precision, and Zeiss is contractually locked to ASML.</li>
-                <li><strong>20+ year development cycles:</strong> EUV took 17 years and €6B+ to commercialize. Next-generation High-NA is already shipping.</li>
-                <li><strong>Captive customer base:</strong> TSMC, Samsung, and Intel cannot produce leading-edge chips without ASML's machines.</li>
-              </ul>
-              <h2 className="text-xl font-medium mt-6 mb-3">Why the Market is Wrong</h2>
-              <p className="mb-4">Current multiples discount a cyclical downturn in 2025–2026. <em>They miss that the backlog has structurally re-rated.</em> The order book now extends through 2029, with non-cancellable deposits representing 41% of order value — up from 18% in 2021.</p>
-              <blockquote className="border-l-2 pl-5 my-5 italic" style={{ borderColor: 'var(--ink)', color: 'var(--ink-soft)' }}>"If you want to bet against the entire semiconductor industry, short ASML. If you want to own the semiconductor industry, own ASML." — Analyst note, Morgan Stanley</blockquote>
-              <h2 className="text-xl font-medium mt-6 mb-3">Path to $1,400</h2>
-              <p className="mb-4">At 32x forward earnings — a discount to its 5-year average of 38x — ASML reaches $1,400 by 2026 under conservative assumptions:</p>
-              <ol className="list-decimal pl-6 mb-4 space-y-1">
-                <li>EUV shipment volume grows 18% CAGR through 2028</li>
-                <li>Service revenue compounds at 12% (high-margin, recurring)</li>
-                <li>High-NA pricing premium of 35% materializes</li>
-              </ol>
-              <p>The downside is protected by a non-cancellable backlog that exceeds two years of revenue.</p>
-            </article>
+            {base.body
+              ? <article className="editor-content" style={{ minHeight: 'auto' }} dangerouslySetInnerHTML={{ __html: base.body }} />
+              : <article className="font-serif text-[17px] leading-[1.75]" style={{ color: 'var(--ink-soft)' }}>
+                  <p>The full thesis text isn’t available for this entry.</p>
+                </article>}
 
             <div className="mt-12">
               <div className="flex items-baseline justify-between mb-5">
@@ -167,32 +164,11 @@ export default function ThesisDetail({ navigate }) {
                   <i className="icon-plus text-xs"></i> Append Update
                 </button>
               </div>
-              <div className="space-y-6">
-                <div className="border-l-2 pl-5 pb-2 relative" style={{ borderColor: 'var(--border-strong)' }}>
-                  <div className="absolute -left-[5px] top-1 w-2 h-2 rounded-full" style={{ background: 'var(--ink)' }}></div>
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="text-[10px] font-mono uppercase tracking-wider px-1.5 py-0.5" style={{ background: 'var(--bg-warm)', color: 'var(--ink-soft)' }}>Update #3</span>
-                    <span className="text-xs font-mono" style={{ color: 'var(--muted)' }}>2 days ago · Nov 5, 2024</span>
-                  </div>
-                  <p className="text-sm leading-relaxed">Q4 backlog expanded to €36B, above consensus €32B. EUV shipments tracking at 62 units vs. guidance of 55. Gross margin held at 50.8% despite mix headwinds. Thesis intact; raising target from $1,400 to $1,480.</p>
-                </div>
-                <div className="border-l-2 pl-5 pb-2 relative" style={{ borderColor: 'var(--border-strong)' }}>
-                  <div className="absolute -left-[5px] top-1 w-2 h-2 rounded-full" style={{ background: 'var(--ink-soft)' }}></div>
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="text-[10px] font-mono uppercase tracking-wider px-1.5 py-0.5" style={{ background: 'var(--bg-warm)', color: 'var(--ink-soft)' }}>Update #2</span>
-                    <span className="text-xs font-mono" style={{ color: 'var(--muted)' }}>Jul 18, 2024</span>
-                  </div>
-                  <p className="text-sm leading-relaxed">Q2 earnings confirmed margin expansion thesis. Service revenue grew 14% YoY, accelerating from 11%. China revenue at 21% — approaching the 25% trigger threshold. Monitoring closely but no action yet.</p>
-                </div>
-                <div className="border-l-2 pl-5 pb-2 relative" style={{ borderColor: 'var(--border-strong)' }}>
-                  <div className="absolute -left-[5px] top-1 w-2 h-2 rounded-full" style={{ background: 'var(--ink-soft)' }}></div>
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="text-[10px] font-mono uppercase tracking-wider px-1.5 py-0.5" style={{ background: 'var(--bg-warm)', color: 'var(--ink-soft)' }}>Update #1</span>
-                    <span className="text-xs font-mono" style={{ color: 'var(--muted)' }}>Apr 22, 2024</span>
-                  </div>
-                  <p className="text-sm leading-relaxed">Q1 print reinforced the core thesis. Booked orders for 2026 delivery already exceed internal forecast by 18%. High-NA system installed at Intel ahead of schedule. No change to view.</p>
-                </div>
-              </div>
+              <p className="text-sm" style={{ color: 'var(--muted)' }}>
+                {base.updates > 0
+                  ? `${base.updates} update${base.updates === 1 ? '' : 's'} recorded on this thesis.`
+                  : 'No updates appended yet.'}
+              </p>
             </div>
           </div>
 
@@ -200,42 +176,22 @@ export default function ThesisDetail({ navigate }) {
             <div>
               <h4 className="font-serif text-base font-medium mb-3">Trigger Monitor</h4>
               <div className="space-y-2">
-                <div className="p-3 border rounded" style={{ borderColor: 'var(--border)', background: 'white' }}>
-                  <div className="flex items-start justify-between gap-2 mb-1">
-                    <span className="text-[10px] font-mono uppercase tracking-wider trigger-clear">● CLEAR</span>
-                    <span className="text-[10px] font-mono" style={{ color: 'var(--muted)' }}>Monitored live</span>
-                  </div>
-                  <p className="text-xs leading-snug">Gross margin falls below 45%</p>
-                  <div className="flex justify-between mt-1.5 text-[10px] font-mono">
-                    <span style={{ color: 'var(--muted)' }}>Current: <span className="trigger-clear font-semibold">50.8%</span></span>
-                    <span style={{ color: 'var(--muted)' }}>Trigger: &lt;45%</span>
-                  </div>
-                </div>
-                <div className="p-3 border rounded" style={{ borderColor: 'var(--border)', background: 'white' }}>
-                  <div className="flex items-start justify-between gap-2 mb-1">
-                    <span className="text-[10px] font-mono uppercase tracking-wider trigger-clear">● CLEAR</span>
-                    <span className="text-[10px] font-mono" style={{ color: 'var(--muted)' }}>Annual</span>
-                  </div>
-                  <p className="text-xs leading-snug">EUV shipments &lt; 40 units annually</p>
-                  <div className="flex justify-between mt-1.5 text-[10px] font-mono">
-                    <span style={{ color: 'var(--muted)' }}>Current: <span className="trigger-clear font-semibold">62</span></span>
-                    <span style={{ color: 'var(--muted)' }}>Trigger: &lt;40</span>
-                  </div>
-                </div>
-                <div className="p-3 border-2 rounded" style={{ borderColor: 'var(--warn)', background: 'var(--warn-soft)' }}>
-                  <div className="flex items-start justify-between gap-2 mb-1">
-                    <span className="text-[10px] font-mono uppercase tracking-wider trigger-warning">▲ WARNING</span>
-                    <span className="text-[10px] font-mono" style={{ color: 'var(--warn)' }}>84% to breach</span>
-                  </div>
-                  <p className="text-xs leading-snug">China revenue exceeds 25% of total</p>
-                  <div className="flex justify-between mt-1.5 text-[10px] font-mono">
-                    <span style={{ color: 'var(--ink-soft)' }}>Current: <span className="trigger-warning font-semibold">21%</span></span>
-                    <span style={{ color: 'var(--ink-soft)' }}>Trigger: &gt;25%</span>
-                  </div>
-                  <div className="mt-2 h-1 rounded-full overflow-hidden" style={{ background: 'white' }}>
-                    <div className="h-full" style={{ width: '84%', background: 'var(--warn)' }}></div>
-                  </div>
-                </div>
+                {(base.triggers || []).length === 0 && (
+                  <p className="text-xs" style={{ color: 'var(--muted)' }}>No triggers defined.</p>
+                )}
+                {(base.triggers || []).map((trig, i) => {
+                  const meta = TRIGGER_META[trig.s] || TRIGGER_META.clear
+                  const warn = trig.s === 'warning' || trig.s === 'breached'
+                  return (
+                    <div key={i} className={warn ? 'p-3 border-2 rounded' : 'p-3 border rounded'} style={warn ? { borderColor: trig.s === 'breached' ? 'var(--bear)' : 'var(--warn)', background: trig.s === 'breached' ? 'var(--bear-soft)' : 'var(--warn-soft)' } : { borderColor: 'var(--border)', background: 'white' }}>
+                      <div className="flex items-start justify-between gap-2 mb-1">
+                        <span className={`text-[10px] font-mono uppercase tracking-wider ${meta.cls}`}>{meta.label}</span>
+                        <span className="text-[10px] font-mono" style={{ color: 'var(--muted)' }}>Monitored live</span>
+                      </div>
+                      <p className="text-xs leading-snug">{trig.c}</p>
+                    </div>
+                  )
+                })}
               </div>
             </div>
 
@@ -304,9 +260,9 @@ export default function ThesisDetail({ navigate }) {
                 <span className="text-xs font-mono uppercase tracking-wider font-semibold">Integrity Record</span>
               </div>
               <div className="space-y-1.5 text-[11px] font-mono" style={{ color: 'var(--ink-soft)' }}>
-                <div className="flex justify-between"><span>Created:</span><span>Mar 14, 2024 · 09:31:02</span></div>
-                <div className="flex justify-between"><span>Published:</span><span>Mar 14, 2024 · 09:32:14</span></div>
-                <div className="flex justify-between"><span>Entry locked:</span><span>{fmtPrice(entry, currency)} @ 09:32:14</span></div>
+                <div className="flex justify-between"><span>Created:</span><span>{created}</span></div>
+                <div className="flex justify-between"><span>Published:</span><span>{base.publishDate}</span></div>
+                <div className="flex justify-between"><span>Entry locked:</span><span>{fmtPrice(entry, currency)}</span></div>
                 <div className="flex justify-between"><span>Edits to body:</span><span>0 permitted</span></div>
                 <div className="flex justify-between"><span>Deletions:</span><span>0 permitted</span></div>
               </div>
