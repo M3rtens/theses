@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { sampleTheses } from '../data/theses.js'
 import { useLiveTheses } from '../lib/useLiveTheses.js'
 import { useStoredTheses } from '../lib/useStoredTheses.js'
@@ -7,6 +8,26 @@ export default function MyTheses({ navigate }) {
   const stored = useStoredTheses()
   const allTheses = [...stored, ...sampleTheses]
   const live = useLiveTheses(allTheses)
+
+  // Status: 'all' | 'active' | 'closed'. Side: 'all' | 'bull' | 'bear'.
+  const [status, setStatus] = useState('all')
+  const [side, setSide] = useState('all')
+
+  const isClosed = (t) => t.status === 'closed'
+  const counts = {
+    all: allTheses.length,
+    active: allTheses.filter((t) => !isClosed(t)).length,
+    closed: allTheses.filter(isClosed).length,
+  }
+
+  const visible = allTheses.filter((t) => {
+    if (status === 'active' && isClosed(t)) return false
+    if (status === 'closed' && !isClosed(t)) return false
+    if (side !== 'all' && t.side !== side) return false
+    return true
+  })
+
+  const filterClass = (on) => `lb-filter text-xs px-3 py-1 rounded ${on ? 'active' : ''}`
   return (
     <>
       <header className="px-12 pt-8 pb-6 border-b" style={{ borderColor: 'var(--border)' }}>
@@ -23,14 +44,14 @@ export default function MyTheses({ navigate }) {
 
         <div className="flex items-center gap-2 mt-6">
           <div className="flex items-center gap-1 p-1 border rounded-md" style={{ borderColor: 'var(--border)', background: 'white' }}>
-            <button className="lb-filter active text-xs px-3 py-1 rounded">All (12)</button>
-            <button className="lb-filter text-xs px-3 py-1 rounded">Active (7)</button>
-            <button className="lb-filter text-xs px-3 py-1 rounded">Closed (5)</button>
+            <button onClick={() => setStatus('all')} className={filterClass(status === 'all')}>All ({counts.all})</button>
+            <button onClick={() => setStatus('active')} className={filterClass(status === 'active')}>Active ({counts.active})</button>
+            <button onClick={() => setStatus('closed')} className={filterClass(status === 'closed')}>Closed ({counts.closed})</button>
           </div>
           <div className="flex items-center gap-1 p-1 border rounded-md" style={{ borderColor: 'var(--border)', background: 'white' }}>
-            <button className="lb-filter text-xs px-3 py-1 rounded">All Sides</button>
-            <button className="lb-filter text-xs px-3 py-1 rounded">Long</button>
-            <button className="lb-filter text-xs px-3 py-1 rounded">Short</button>
+            <button onClick={() => setSide('all')} className={filterClass(side === 'all')}>All Sides</button>
+            <button onClick={() => setSide('bull')} className={filterClass(side === 'bull')}>Long</button>
+            <button onClick={() => setSide('bear')} className={filterClass(side === 'bear')}>Short</button>
           </div>
         </div>
       </header>
@@ -52,12 +73,27 @@ export default function MyTheses({ navigate }) {
               </tr>
             </thead>
             <tbody>
-              {allTheses.map(t => {
+              {visible.length === 0 && (
+                <tr>
+                  <td colSpan={9} className="px-4 py-10 text-center text-sm" style={{ color: 'var(--muted)' }}>
+                    No theses match this filter.
+                  </td>
+                </tr>
+              )}
+              {visible.map(t => {
                 const l = live[t.ticker]
-                const entry = l?.entry ?? t.entry
+                // A user-published thesis stores its entry sealed in native currency;
+                // never let the live fetch overwrite it (its recomputed entry would
+                // flicker the cell). Samples carry no native entry, so use the live one.
+                const sealed = t.currency != null
+                const entry = sealed ? t.entry : (l?.entry ?? t.entry)
                 const current = l?.current ?? t.current
-                const ret = l?.ret ?? t.ret
-                const currency = l?.currency ?? 'USD'
+                const currency = l?.currency ?? t.currency ?? 'USD'
+                // Derive return from the displayed entry + current so all three cells
+                // stay consistent; fall back to the stored value before live loads.
+                const ret = l
+                  ? Number(((t.side === 'bear' ? -1 : 1) * ((current - entry) / entry) * 100).toFixed(1))
+                  : t.ret
                 const retClass = ret >= 0 ? 'ret-pos' : 'ret-neg'
                 const sign = ret >= 0 ? '+' : '−'
                 const sideClass = t.side === 'bull' ? 'side-bull' : 'side-bear'

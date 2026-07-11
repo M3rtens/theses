@@ -1,5 +1,27 @@
 [
   {
+    "title": "Samsung",
+    "ticker": "005930.KS",
+    "company": "Samsung Electronics Co., Ltd.",
+    "side": "bull",
+    "sector": "Semiconductors",
+    "publishDate": "Jul 12, 2026",
+    "entryDate": "2026-07-11",
+    "daysActive": 0,
+    "entry": 285000,
+    "current": 285000,
+    "ret": 0,
+    "status": "active",
+    "updates": 0,
+    "triggers": [],
+    "currency": "KRW",
+    "resolvedSymbol": "005930.KS",
+    "exchange": "KSE",
+    "body": "\n  <h1>Test</h1>\n",
+    "createdAt": "2026-07-11T16:25:51.681Z",
+    "id": 2
+  },
+  {
     "title": "test",
     "ticker": "ASML",
     "company": "ASML Holding N.V.",

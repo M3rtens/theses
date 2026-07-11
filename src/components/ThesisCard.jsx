@@ -3,10 +3,16 @@ import { fmtPrice } from '../lib/format.js'
 
 export default function ThesisCard({ thesis: t, variant = 'dashboard', onOpen, live }) {
   // Prefer live native-currency figures; fall back to the static locked numbers.
-  const entry = live?.entry ?? t.entry
+  // A user-published thesis stores its entry sealed in native currency, so never
+  // overwrite it with the live-recomputed entry (which would flicker on load).
+  const sealed = t.currency != null
+  const entry = sealed ? t.entry : (live?.entry ?? t.entry)
   const current = live?.current ?? t.current
-  const ret = live?.ret ?? t.ret
-  const currency = live?.currency ?? 'USD'
+  const currency = live?.currency ?? t.currency ?? 'USD'
+  // Derive return from the displayed entry + current so the figures stay consistent.
+  const ret = live
+    ? Number(((t.side === 'bear' ? -1 : 1) * ((current - entry) / entry) * 100).toFixed(1))
+    : t.ret
 
   const retClass = ret >= 0 ? 'ret-pos' : 'ret-neg'
   const sign = ret >= 0 ? '+' : '−'

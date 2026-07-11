@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server'
 import { listTheses, addThesis } from '../../../src/lib/thesesStore.js'
-import { lockEntryPrice } from '../../../src/lib/yahoo.js'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -41,8 +40,11 @@ export async function POST(request) {
   }
 
   // Seal the entry at the current market price, in the stock's own currency.
+  // Imported lazily so the GET (list) path doesn't drag the heavy yahoo-finance2
+  // module into its bundle — keeping the thesis list fast to load.
   let lock
   try {
+    const { lockEntryPrice } = await import('../../../src/lib/yahoo.js')
     lock = await lockEntryPrice(ticker)
   } catch (e) {
     return NextResponse.json({ error: `could not lock entry price: ${e.message}` }, { status: 502 })
