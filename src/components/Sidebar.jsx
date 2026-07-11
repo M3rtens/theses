@@ -1,18 +1,11 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { sampleTheses, sampleDrafts } from '../data/theses.js'
 import { loadDrafts } from '../lib/drafts.js'
-
-const WATCHLIST = [
-  { symbol: 'ASML', fallback: 15.1 },
-  { symbol: 'CRM', fallback: -8.4 },
-  { symbol: 'CRWD', fallback: 22.7 },
-  { symbol: 'CVX', fallback: 6.2 },
-]
 
 const NAV_MAIN = [
   { view: 'dashboard', icon: 'icon-layout-dashboard', label: 'Dashboard' },
   { view: 'mytheses', icon: 'icon-file-text', label: 'My Theses' },
-  { view: 'drafts', icon: 'icon-file-edit', label: 'Drafts' },
+  { view: 'drafts', icon: 'icon-file-pen', label: 'Drafts' },
 ]
 
 const NAV_COMMUNITY = [
@@ -24,27 +17,43 @@ const NAV_COMMUNITY = [
 export default function Sidebar({ view, navigate }) {
   const navClass = (v) => `nav-item ${view === v ? 'active' : ''} cursor-pointer flex items-center gap-2.5 py-1`
 
-  // Workspace counts: published theses (store) + samples, and saved drafts
-  // (localStorage) + samples. Refreshed on every navigation so a freshly
-  // published thesis or saved draft is reflected without a reload.
-  const [thesesCount, setThesesCount] = useState(sampleTheses.length)
+  // Published theses (store) + samples, refreshed on every navigation so a freshly
+  // published thesis is reflected without a reload. Drives both the workspace count
+  // and the watchlist below. Drafts come from localStorage + samples.
+  const [stored, setStored] = useState([])
   const [draftCount, setDraftCount] = useState(sampleDrafts.length)
   useEffect(() => {
     let cancelled = false
     fetch('/api/theses')
       .then((r) => (r.ok ? r.json() : []))
-      .then((rows) => { if (!cancelled && Array.isArray(rows)) setThesesCount(rows.length + sampleTheses.length) })
+      .then((rows) => { if (!cancelled && Array.isArray(rows)) setStored(rows) })
       .catch(() => { /* store unavailable — samples only */ })
     setDraftCount(loadDrafts().length + sampleDrafts.length)
     return () => { cancelled = true }
   }, [view])
-  const counts = { mytheses: thesesCount, drafts: draftCount }
+
+  const allTheses = useMemo(() => [...stored, ...sampleTheses], [stored])
+  const counts = { mytheses: allTheses.length, drafts: draftCount }
+
+  // Watchlist = the tickers you hold an active thesis on, deduped and in
+  // first-seen order (stored theses lead, then samples).
+  const watchlist = useMemo(() => {
+    const seen = new Set()
+    const list = []
+    for (const t of allTheses) {
+      if (t.status !== 'active' || !t.ticker || seen.has(t.ticker)) continue
+      seen.add(t.ticker)
+      list.push(t.ticker)
+    }
+    return list
+  }, [allTheses])
 
   const [quotes, setQuotes] = useState({})
+  const symbolsKey = watchlist.join(',')
   useEffect(() => {
+    if (!symbolsKey) { setQuotes({}); return }
     let cancelled = false
-    const symbols = WATCHLIST.map((w) => w.symbol).join(',')
-    fetch(`/api/quotes?symbols=${symbols}`)
+    fetch(`/api/quotes?symbols=${symbolsKey}`)
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
       .then((rows) => {
         if (cancelled || !Array.isArray(rows)) return
@@ -52,12 +61,12 @@ export default function Sidebar({ view, navigate }) {
         rows.forEach((q) => { map[q.symbol] = q })
         setQuotes(map)
       })
-      .catch(() => { /* keep fallback values */ })
+      .catch(() => { /* leave percentages blank until the quote loads */ })
     return () => { cancelled = true }
-  }, [])
+  }, [symbolsKey])
 
   return (
-    <aside className="w-60 border-r flex flex-col shrink-0" style={{ borderColor: 'var(--border)', background: 'var(--bg)' }}>
+    <aside className="w-60 border-r flex flex-col shrink-0 self-start sticky top-0 h-screen" style={{ borderColor: 'var(--border)', background: 'var(--bg)' }}>
       <div className="px-6 pt-7 pb-8">
         <div className="flex items-baseline gap-1">
           <span className="font-serif text-2xl font-medium tracking-tight" style={{ color: 'var(--ink)' }}>Theses</span>
@@ -73,14 +82,14 @@ export default function Sidebar({ view, navigate }) {
         </button>
       </div>
 
-      <nav className="px-6 flex-1">
+      <nav className="px-6 flex-1 min-h-0 overflow-y-auto">
         <div className="text-[10px] font-mono uppercase tracking-wider mb-3" style={{ color: 'var(--faint)' }}>Workspace</div>
         <ul className="space-y-1.5 text-sm">
           {NAV_MAIN.map(n => (
             <li key={n.view}>
               <a onClick={() => navigate(n.view)} className={navClass(n.view)} style={{ color: 'var(--ink-soft)' }}>
                 <i className={`${n.icon} text-[15px]`}></i> {n.label}
-                {counts[n.view] != null && <span className="ml-auto text-[10px] font-mono" style={{ color: 'var(--faint)' }}>{counts[n.view]}</span>}
+                {counts[n.view] != null && <span className="ml-auto text-[10px] font-mono" style={{ color: 'var(--ink-soft)' }}>{counts[n.view]}</span>}
               </a>
             </li>
           ))}
@@ -104,20 +113,25 @@ export default function Sidebar({ view, navigate }) {
         </ul>
 
         <div className="text-[10px] font-mono uppercase tracking-wider mb-3 mt-7" style={{ color: 'var(--faint)' }}>Watchlist</div>
-        <ul className="space-y-1.5 text-[13px]" style={{ color: 'var(--ink-soft)' }}>
-          {WATCHLIST.map((w) => {
-            const pct = quotes[w.symbol]?.changePercent
-            const val = pct == null ? w.fallback : pct
-            const cls = val >= 0 ? 'ret-pos' : 'ret-neg'
-            const sign = val >= 0 ? '+' : '−'
-            return (
-              <li key={w.symbol} className="flex items-center justify-between">
-                <span className="font-mono">{w.symbol}</span>
-                <span className={`num-mono text-[11px] ${cls}`}>{sign}{Math.abs(val).toFixed(1)}%</span>
-              </li>
-            )
-          })}
-        </ul>
+        {watchlist.length === 0 ? (
+          <p className="text-[11px]" style={{ color: 'var(--faint)' }}>No active theses yet.</p>
+        ) : (
+          <ul className="space-y-1.5 text-[13px]" style={{ color: 'var(--ink-soft)' }}>
+            {watchlist.map((symbol) => {
+              const pct = quotes[symbol]?.changePercent
+              const cls = pct == null ? '' : pct >= 0 ? 'ret-pos' : 'ret-neg'
+              const sign = pct == null ? '' : pct >= 0 ? '+' : '−'
+              return (
+                <li key={symbol} className="flex items-center justify-between">
+                  <span className="font-mono">{symbol}</span>
+                  <span className={`num-mono text-[11px] ${cls}`}>
+                    {pct == null ? '—' : `${sign}${Math.abs(pct).toFixed(1)}%`}
+                  </span>
+                </li>
+              )
+            })}
+          </ul>
+        )}
       </nav>
 
       <div className="px-4 py-4 border-t" style={{ borderColor: 'var(--border)' }}>
