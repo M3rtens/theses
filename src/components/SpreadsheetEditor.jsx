@@ -502,9 +502,9 @@ export default function SpreadsheetEditor({ initialModel, onChange }) {
     <div className="excel-titlebar">
       <div className="excel-app-mark">X</div>
       <input aria-label="Spreadsheet filename" className="spreadsheet-file-name" value={fileName} onChange={(event) => updateFileName(event.target.value)} onBlur={() => { if (!fileName.trim()) updateFileName(DEFAULT_FILE_NAME) }} />
-      <span className="excel-saved-state">Saved with draft</span>
       <div className="excel-title-actions">
         <input ref={fileInputRef} onChange={importWorkbook} accept=".xlsx,.xls" type="file" className="hidden" />
+        <span className="excel-saved-state">Saved with draft</span>
         <button type="button" onClick={() => fileInputRef.current?.click()}><i className="icon-upload"></i><span>Open</span></button>
         <button type="button" className="primary" onClick={exportWorkbook}><i className="icon-download"></i><span>Download</span></button>
       </div>

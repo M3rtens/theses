@@ -61,6 +61,7 @@ export const saveDraft = (thesis, id) => {
     body: thesis.body || '',
     triggers: thesis.triggers || [],
     model: thesis.model || null,
+    scheduledPublicationDate: thesis.scheduledPublicationDate || null,
     wordCount: wordCount(thesis.body),
     triggersCount: (thesis.triggers || []).length,
     savedAt: Date.now(),
