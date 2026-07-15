@@ -60,6 +60,7 @@ export const saveDraft = (thesis, id) => {
     side: thesis.side || 'bull',
     body: thesis.body || '',
     triggers: thesis.triggers || [],
+    model: thesis.model || null,
     wordCount: wordCount(thesis.body),
     triggersCount: (thesis.triggers || []).length,
     savedAt: Date.now(),

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import SecuritySearch from '../components/SecuritySearch.jsx'
 import { fmtPrice, currencySymbol } from '../lib/format.js'
 import { saveDraft as persistDraft } from '../lib/drafts.js'
+import SpreadsheetEditor from '../components/SpreadsheetEditor.jsx'
 
 const INITIAL_TRIGGERS = [
   { id: 1, condition: 'Gross margin falls below 45%', metric: 'Gross Margin', threshold: '45%', current: '50.8%', status: 'clear' },
@@ -50,6 +51,9 @@ const SLASH_ITEMS = [
   { action: 'embed', icon: <i className="icon-bar-chart-3 text-xs"></i>, label: 'Embed Chart', desc: 'Financials, charts, models' },
 ]
 
+// Kept only temporarily while the original mockup is retired from the source.
+const showLegacyModel = false
+
 export default function Editor({ draft = null, navigate, showToast, onOpenPublish }) {
   // Rebuild the internal trigger shape from a saved draft's compact { c, s } rows.
   const draftTriggers = draft?.triggers?.length
@@ -76,6 +80,7 @@ export default function Editor({ draft = null, navigate, showToast, onOpenPublis
   const [stmtLoading, setStmtLoading] = useState(false)
   const [stmtView, setStmtView] = useState('income')      // income | balance | cashflow
   const [stmtPeriod, setStmtPeriod] = useState('annual')  // annual | quarterly
+  const [model, setModel] = useState(draft?.model || null)
 
   const editorRef = useRef(null)
   const titleRef = useRef(null)
@@ -141,6 +146,7 @@ export default function Editor({ draft = null, navigate, showToast, onOpenPublis
     side,
     body: editorRef.current?.innerHTML || '',
     triggers: triggers.map((t) => ({ c: t.condition, s: t.status })),
+    model,
   })
 
   const openPublish = () => {
@@ -426,6 +432,8 @@ export default function Editor({ draft = null, navigate, showToast, onOpenPublis
         </div>
 
         <div className={tabHidden('model')}>
+          <SpreadsheetEditor initialModel={model || undefined} onChange={setModel} />
+          {showLegacyModel && <>
           <div className="border rounded-md overflow-hidden" style={{ borderColor: 'var(--border)' }}>
             <div className="px-4 py-2.5 border-b flex items-center justify-between" style={{ borderColor: 'var(--border)', background: 'var(--bg-warm)' }}>
               <div className="flex items-center gap-2">
@@ -474,6 +482,7 @@ export default function Editor({ draft = null, navigate, showToast, onOpenPublis
             </div>
           </div>
           <p className="text-xs mt-3" style={{ color: 'var(--muted)' }}>Model is embedded live. Changes to assumptions flow through to the thesis automatically.</p>
+          </>}
         </div>
 
         <div className={tabHidden('financials')}>
