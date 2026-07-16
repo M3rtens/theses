@@ -1,5 +1,8 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { leaderboardData } from '../data/theses.js'
+import { rankedLeaderboard } from '../lib/stats.js'
+import { useLiveTheses } from '../lib/useLiveTheses.js'
+import { useStoredTheses } from '../lib/useStoredTheses.js'
 
 const SIDE_FILTERS = [
   { value: 'all', label: 'All' },
@@ -27,7 +30,13 @@ export default function Leaderboard({ navigate }) {
   const [periodFilter, setPeriodFilter] = useState('all')
   const [sectorFilter, setSectorFilter] = useState('All Sectors')
 
-  const filteredData = leaderboardData.filter((analyst) => {
+  // The user's own row is computed from their real theses and the board re-ranked
+  // by average return; the seeded analysts are unchanged.
+  const published = useStoredTheses()
+  const live = useLiveTheses(published)
+  const board = useMemo(() => rankedLeaderboard(leaderboardData, published, live), [published, live])
+
+  const filteredData = board.filter((analyst) => {
     const side = analyst.best.includes('Short') ? 'bear' : 'bull'
     const ticker = analyst.best.split(' · ')[0]
     const sector = SECTOR_BY_TICKER[ticker] || 'Other'

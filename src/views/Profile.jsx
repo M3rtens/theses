@@ -1,55 +1,68 @@
+import { useMemo } from 'react'
 import ThesisCard from '../components/ThesisCard.jsx'
+import { leaderboardData } from '../data/theses.js'
+import { rankedLeaderboard } from '../lib/stats.js'
 import { useLiveTheses } from '../lib/useLiveTheses.js'
 import { useStoredTheses } from '../lib/useStoredTheses.js'
 
 export default function Profile({ navigate }) {
   const published = useStoredTheses()
   const live = useLiveTheses(published)
+
+  // The profile mirrors this analyst's row on the leaderboard — computed from
+  // their real theses and re-ranked by return — so both surfaces agree.
+  const board = useMemo(() => rankedLeaderboard(leaderboardData, published, live), [published, live])
+  const meIdx = board.findIndex((r) => r.isYou)
+  const me = meIdx >= 0 ? board[meIdx] : null
+  const myRank = meIdx + 1
+  const signed = (n) => `${n >= 0 ? '+' : '−'}${Math.abs(n).toFixed(1)}%`
+  const retClass = (n) => (n >= 0 ? 'ret-pos' : 'ret-neg')
+
   return (
     <>
       <header className="px-12 pt-8 pb-8 border-b" style={{ borderColor: 'var(--border)' }}>
         <div className="flex items-start gap-6">
-          <div className="w-20 h-20 rounded-full flex items-center justify-center font-mono text-2xl font-semibold shrink-0" style={{ background: 'var(--ink)', color: 'white' }}>EV</div>
+          <div className="w-20 h-20 rounded-full flex items-center justify-center font-mono text-2xl font-semibold shrink-0" style={{ background: 'var(--ink)', color: 'white' }}>{me?.avatar || '—'}</div>
           <div className="flex-1">
             <div className="flex items-center gap-3 mb-1">
-              <h1 className="font-serif text-3xl font-medium tracking-tight">Elena Vance</h1>
+              <h1 className="font-serif text-3xl font-medium tracking-tight">{me?.name || 'You'}</h1>
               <span className="seal"><i className="icon-badge-check text-[11px]"></i> Verified Analyst</span>
             </div>
-            <div className="text-sm font-mono" style={{ color: 'var(--muted)' }}>@evance · Joined Jan 2022 · San Francisco</div>
+            <div className="text-sm font-mono" style={{ color: 'var(--muted)' }}>{me?.handle || ''} · Joined Jan 2022 · San Francisco</div>
             <p className="text-sm mt-2 max-w-xl" style={{ color: 'var(--ink-soft)' }}>Long-biased equity analyst focused on capital-intensive monopolies and structural supply constraints. CFA Charterholder. Former sell-side at Bernstein.</p>
           </div>
           <div className="text-right">
             <div className="text-[10px] font-mono uppercase tracking-wider" style={{ color: 'var(--muted)' }}>Global Rank</div>
-            <div className="font-serif text-4xl font-medium">#14</div>
-            <div className="text-xs font-mono" style={{ color: 'var(--ink-soft)' }}>Top 0.5% of 2,841</div>
+            <div className="font-serif text-4xl font-medium">{me ? `#${myRank}` : '—'}</div>
+            <div className="text-xs font-mono" style={{ color: 'var(--ink-soft)' }}>of {board.length} analysts</div>
           </div>
         </div>
 
         <div className="grid grid-cols-5 gap-px mt-8" style={{ background: 'var(--border)' }}>
           <div className="p-4" style={{ background: 'var(--bg)' }}>
             <div className="text-[10px] font-mono uppercase tracking-wider mb-1" style={{ color: 'var(--muted)' }}>Win Rate</div>
-            <div className="font-serif text-3xl font-medium">71%</div>
-            <div className="text-[11px] font-mono" style={{ color: 'var(--ink-soft)' }}>5W / 2L · 7 closed</div>
+            <div className="font-serif text-3xl font-medium">{me ? `${me.winRate}%` : '—'}</div>
+            <div className="text-[11px] font-mono" style={{ color: 'var(--ink-soft)' }}>Across closed theses</div>
           </div>
           <div className="p-4" style={{ background: 'var(--bg)' }}>
             <div className="text-[10px] font-mono uppercase tracking-wider mb-1" style={{ color: 'var(--muted)' }}>Avg Return</div>
-            <div className="font-serif text-3xl font-medium ret-pos">+11.4%</div>
+            <div className={`font-serif text-3xl font-medium ${me ? retClass(me.avgReturn) : ''}`}>{me ? signed(me.avgReturn) : '—'}</div>
             <div className="text-[11px] font-mono" style={{ color: 'var(--ink-soft)' }}>Per thesis</div>
           </div>
           <div className="p-4" style={{ background: 'var(--bg)' }}>
             <div className="text-[10px] font-mono uppercase tracking-wider mb-1" style={{ color: 'var(--muted)' }}>Annualized</div>
-            <div className="font-serif text-3xl font-medium ret-pos">+19.8%</div>
-            <div className="text-[11px] font-mono" style={{ color: 'var(--ink-soft)' }}>vs S&amp;P +11.2%</div>
+            <div className={`font-serif text-3xl font-medium ${me ? retClass(me.annualized) : ''}`}>{me ? signed(me.annualized) : '—'}</div>
+            <div className="text-[11px] font-mono" style={{ color: 'var(--ink-soft)' }}>Time-adjusted</div>
           </div>
           <div className="p-4" style={{ background: 'var(--bg)' }}>
             <div className="text-[10px] font-mono uppercase tracking-wider mb-1" style={{ color: 'var(--muted)' }}>Total Theses</div>
-            <div className="font-serif text-3xl font-medium">12</div>
-            <div className="text-[11px] font-mono" style={{ color: 'var(--ink-soft)' }}>7 active · 5 closed</div>
+            <div className="font-serif text-3xl font-medium">{me ? me.theses : '—'}</div>
+            <div className="text-[11px] font-mono" style={{ color: 'var(--ink-soft)' }}>Published</div>
           </div>
           <div className="p-4" style={{ background: 'var(--bg)' }}>
             <div className="text-[10px] font-mono uppercase tracking-wider mb-1" style={{ color: 'var(--muted)' }}>Avg Hold</div>
-            <div className="font-serif text-3xl font-medium">214d</div>
-            <div className="text-[11px] font-mono" style={{ color: 'var(--ink-soft)' }}>~7 months</div>
+            <div className="font-serif text-3xl font-medium">{me?.avgHold || '—'}</div>
+            <div className="text-[11px] font-mono" style={{ color: 'var(--ink-soft)' }}>Per thesis</div>
           </div>
         </div>
       </header>
