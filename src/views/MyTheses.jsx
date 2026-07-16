@@ -1,12 +1,11 @@
 import { useState } from 'react'
-import { sampleTheses } from '../data/theses.js'
 import { useLiveTheses } from '../lib/useLiveTheses.js'
 import { useStoredTheses } from '../lib/useStoredTheses.js'
 import { fmtPrice } from '../lib/format.js'
 
 export default function MyTheses({ navigate }) {
   const stored = useStoredTheses()
-  const allTheses = [...stored, ...sampleTheses]
+  const allTheses = stored
   const live = useLiveTheses(allTheses)
 
   // Status: 'all' | 'active' | 'closed'. Side: 'all' | 'bull' | 'bear'.

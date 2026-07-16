@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import PriceChart from '../components/PriceChart.jsx'
 import SpreadsheetViewer from '../components/SpreadsheetViewer.jsx'
-import { sampleTheses } from '../data/theses.js'
 import { fmtPrice } from '../lib/format.js'
 import { modelHasContent } from '../lib/model.js'
 import { evaluateTrigger, latestMetric, formatMetricValue } from '../lib/triggers.js'
@@ -34,9 +33,9 @@ function rangeFrom(range, entryDate) {
 }
 
 export default function ThesisDetail({ navigate, thesis }) {
-  // The thesis to show comes from navigation; fall back to the first sample so a
-  // direct load (no selection) still renders something rather than a blank page.
-  const base = thesis || sampleTheses[0]
+  // The thesis to show comes from navigation. Guard against a direct load with no
+  // selection so the hooks below still run against a defined object.
+  const base = thesis || {}
 
   const symbol = base.ticker || 'ASML'
   const entryDate = base.entryDate || '2024-03-14'

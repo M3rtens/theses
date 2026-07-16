@@ -1,9 +1,10 @@
 import ThesisCard from '../components/ThesisCard.jsx'
-import { sampleTheses } from '../data/theses.js'
 import { useLiveTheses } from '../lib/useLiveTheses.js'
+import { useStoredTheses } from '../lib/useStoredTheses.js'
 
 export default function Profile({ navigate }) {
-  const live = useLiveTheses(sampleTheses)
+  const published = useStoredTheses()
+  const live = useLiveTheses(published)
   return (
     <>
       <header className="px-12 pt-8 pb-8 border-b" style={{ borderColor: 'var(--border)' }}>
@@ -65,8 +66,11 @@ export default function Profile({ navigate }) {
               </div>
             </div>
             <div className="space-y-3">
-              {sampleTheses.map(t => (
-                <ThesisCard key={t.id} thesis={t} variant="profile" live={live[t.ticker]} onOpen={() => navigate('thesis')} />
+              {published.length === 0 && (
+                <p className="text-sm" style={{ color: 'var(--muted)' }}>No published theses yet.</p>
+              )}
+              {published.map(t => (
+                <ThesisCard key={t.id} thesis={t} variant="profile" live={live[t.ticker]} onOpen={() => navigate('thesis', t)} />
               ))}
             </div>
           </div>

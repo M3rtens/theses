@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react'
-import { sampleTheses, sampleDrafts } from '../data/theses.js'
 import { loadDrafts } from '../lib/drafts.js'
 
 const NAV_MAIN = [
@@ -17,26 +16,32 @@ const NAV_COMMUNITY = [
 export default function Sidebar({ view, navigate }) {
   const navClass = (v) => `nav-item ${view === v ? 'active' : ''} cursor-pointer flex items-center gap-2.5 py-1`
 
-  // Published theses (store) + samples, refreshed on every navigation so a freshly
+  // Published theses from the store, refreshed on every navigation so a freshly
   // published thesis is reflected without a reload. Drives both the workspace count
-  // and the watchlist below. Drafts come from localStorage + samples.
+  // and the watchlist below. Drafts come from localStorage.
   const [stored, setStored] = useState([])
-  const [draftCount, setDraftCount] = useState(sampleDrafts.length)
+  const [draftCount, setDraftCount] = useState(0)
   useEffect(() => {
     let cancelled = false
     fetch('/api/theses')
       .then((r) => (r.ok ? r.json() : []))
       .then((rows) => { if (!cancelled && Array.isArray(rows)) setStored(rows) })
-      .catch(() => { /* store unavailable — samples only */ })
-    setDraftCount(loadDrafts().length + sampleDrafts.length)
+      .catch(() => { /* store unavailable */ })
+    setDraftCount(loadDrafts().length)
     return () => { cancelled = true }
   }, [view])
 
-  const allTheses = useMemo(() => [...stored, ...sampleTheses], [stored])
+  const allTheses = useMemo(() => stored, [stored])
   const counts = { mytheses: allTheses.length, drafts: draftCount }
 
+  // Live count of triggers needing attention (breached or approaching threshold)
+  // across active theses — drives the badge on the Triggers nav item.
+  const alertCount = useMemo(() => allTheses.reduce((n, t) => (
+    t.status === 'closed' ? n : n + (t.triggers || []).filter((tr) => tr.s === 'breached' || tr.s === 'warning').length
+  ), 0), [allTheses])
+
   // Watchlist = the tickers you hold an active thesis on, deduped and in
-  // first-seen order (stored theses lead, then samples).
+  // first-seen order.
   const watchlist = useMemo(() => {
     const seen = new Set()
     const list = []
@@ -96,7 +101,9 @@ export default function Sidebar({ view, navigate }) {
           <li>
             <a onClick={() => navigate('triggers')} className={navClass('triggers')} style={{ color: 'var(--ink-soft)' }}>
               <i className="icon-bell text-[15px]"></i> Triggers
-              <span className="ml-auto inline-flex items-center justify-center w-4 h-4 text-[9px] font-mono" style={{ background: 'var(--bear)', color: 'white', borderRadius: '2px' }}>2</span>
+              {alertCount > 0 && (
+                <span className="ml-auto inline-flex items-center justify-center w-4 h-4 text-[9px] font-mono" style={{ background: 'var(--bear)', color: 'white', borderRadius: '2px' }}>{alertCount}</span>
+              )}
             </a>
           </li>
         </ul>

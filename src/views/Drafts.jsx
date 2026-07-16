@@ -1,11 +1,9 @@
 import { useEffect, useState } from 'react'
-import { sampleDrafts } from '../data/theses.js'
 import { deleteDraft, loadDrafts, relativeTime } from '../lib/drafts.js'
 import ConfirmModal from '../components/ConfirmModal.jsx'
 
 export default function Drafts({ navigate }) {
-  // Saved drafts (localStorage) held in state so deleting one re-renders. Sample
-  // drafts follow for context and are read-only (no savedAt, not stored).
+  // Saved drafts (localStorage) held in state so deleting one re-renders.
   const [saved, setSaved] = useState([])
   useEffect(() => { setSaved(loadDrafts()) }, [])
 
@@ -26,10 +24,7 @@ export default function Drafts({ navigate }) {
     setPendingDelete(null)
   }
 
-  const drafts = [
-    ...saved.map((d) => ({ ...d, lastEdited: relativeTime(d.savedAt) })),
-    ...sampleDrafts,
-  ]
+  const drafts = saved.map((d) => ({ ...d, lastEdited: relativeTime(d.savedAt) }))
 
   return (
     <>
@@ -54,6 +49,9 @@ export default function Drafts({ navigate }) {
       </header>
 
       <div className="px-12 py-8">
+        {drafts.length === 0 && (
+          <p className="text-sm" style={{ color: 'var(--muted)' }}>No drafts yet. Start one with “New Draft”.</p>
+        )}
         <div className="grid grid-cols-2 gap-4">
           {drafts.map(d => {
             const sideClass = d.side === 'bull' ? 'side-bull' : 'side-bear'

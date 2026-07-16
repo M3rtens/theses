@@ -1,12 +1,12 @@
 import ThesisCard from '../components/ThesisCard.jsx'
-import { sampleTheses, leaderboardData } from '../data/theses.js'
+import { leaderboardData } from '../data/theses.js'
 import { useLiveTheses } from '../lib/useLiveTheses.js'
 import { useStoredTheses } from '../lib/useStoredTheses.js'
 
 export default function Dashboard({ navigate }) {
-  // Published theses (from the store) plus the sample set, matching My Theses.
+  // Published theses from the store, matching My Theses.
   const stored = useStoredTheses()
-  const allTheses = [...stored, ...sampleTheses]
+  const allTheses = stored
   const active = allTheses.filter((t) => t.status !== 'closed')
   const live = useLiveTheses(active)
 

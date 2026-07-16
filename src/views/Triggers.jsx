@@ -1,11 +1,10 @@
-import { sampleTheses } from '../data/theses.js'
 import { useStoredTheses } from '../lib/useStoredTheses.js'
 
 export default function Triggers({ navigate }) {
-  // Stored (user-published) theses first — loading them recomputes their trigger
-  // statuses against the latest filings — then the sample set for demo colour.
+  // Stored (user-published) theses — loading them recomputes their trigger
+  // statuses against the latest filings.
   const stored = useStoredTheses()
-  const allTheses = [...stored, ...sampleTheses]
+  const allTheses = stored
 
   const breached = []
   const warning = []
