@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
 import PriceChart from '../components/PriceChart.jsx'
+import SpreadsheetViewer from '../components/SpreadsheetViewer.jsx'
 import { sampleTheses } from '../data/theses.js'
 import { fmtPrice } from '../lib/format.js'
+import { modelHasContent } from '../lib/model.js'
 
 // Trigger status → label + CSS class used in the monitor cards.
 const TRIGGER_META = {
@@ -80,19 +82,33 @@ export default function ThesisDetail({ navigate, thesis }) {
   const publishInWindow = entryDate >= rangeFrom(range, entryDate)
   const publishTime = publishInWindow ? entryDate : null
 
+  // Lifecycle: status + scheduled/sealed close, tracked locally so the Thesis
+  // Controls reflect a close action immediately without a reload.
+  const [status, setStatus] = useState(base.status || 'active')
+  const [closeDate, setCloseDate] = useState(base.closeDate || null)
+  const [closedInfo, setClosedInfo] = useState(
+    base.status === 'closed'
+      ? { closePrice: base.closePrice ?? base.current, closeReturn: base.closeReturn ?? base.ret, closedAt: base.closedAt }
+      : null
+  )
+  const isClosed = status === 'closed'
+
   // A user-published thesis stores its entry sealed in native currency; never let
   // the live fetch overwrite it. Samples carry no native entry, so use the live one.
   const sealed = base.currency != null
   const entry = sealed ? base.entry : (d.entry ?? base.entry)
-  const current = d.current ?? base.current
+  // A closed thesis shows its sealed final price/return; an open one tracks live.
+  const current = isClosed ? (closedInfo?.closePrice ?? base.current) : (d.current ?? base.current)
   const currency = d.currency ?? base.currency ?? 'USD'
   const high = d.high ?? current
   const low = d.low ?? entry
   // Derive return from the displayed entry + current (side-adjusted) so the figures
   // agree; fall back to the stored return before the live price loads.
-  const ret = (d.current != null && entry)
-    ? Number(((base.side === 'bear' ? -1 : 1) * ((current - entry) / entry) * 100).toFixed(1))
-    : base.ret
+  const ret = isClosed
+    ? (closedInfo?.closeReturn ?? base.ret)
+    : (d.current != null && entry)
+      ? Number(((base.side === 'bear' ? -1 : 1) * ((current - entry) / entry) * 100).toFixed(1))
+      : base.ret
   const spReturn = d.spReturn ?? null
   const alpha = d.alpha ?? null
 
@@ -156,6 +172,66 @@ export default function ThesisDetail({ navigate, thesis }) {
   // Owned theses track their log locally; samples keep their static demo count.
   const displayUpdates = owned ? updateCount : (base.updates || 0)
 
+  // Close-date scheduling + close-now, both hitting PATCH /api/theses/:id.
+  const [closeDatePickerOpen, setCloseDatePickerOpen] = useState(false)
+  const [closeDateDraft, setCloseDateDraft] = useState('')
+  const [lifecycleBusy, setLifecycleBusy] = useState(false)
+  const [lifecycleError, setLifecycleError] = useState('')
+
+  const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10)
+
+  const patchLifecycle = async (body) => {
+    const res = await fetch(`/api/theses/${base.id}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+    const saved = await res.json()
+    if (!res.ok) throw new Error(saved?.error || `HTTP ${res.status}`)
+    return saved
+  }
+
+  const openCloseDatePicker = () => {
+    if (!owned || isClosed || closeDate) return
+    setLifecycleError('')
+    setCloseDateDraft(tomorrow)
+    setCloseDatePickerOpen(true)
+  }
+
+  const submitCloseDate = async () => {
+    if (!closeDateDraft || lifecycleBusy) return
+    setLifecycleBusy(true)
+    setLifecycleError('')
+    try {
+      const saved = await patchLifecycle({ action: 'schedule-close', closeDate: closeDateDraft })
+      setCloseDate(saved.closeDate)
+      setCloseDatePickerOpen(false)
+    } catch (e) {
+      setLifecycleError(e.message)
+    } finally {
+      setLifecycleBusy(false)
+    }
+  }
+
+  const closeNow = async () => {
+    if (!owned || isClosed || lifecycleBusy) return
+    if (!window.confirm('Close this thesis now? The final price and return will be sealed from the live feed and cannot be reopened.')) return
+    setLifecycleBusy(true)
+    setLifecycleError('')
+    try {
+      const saved = await patchLifecycle({ action: 'close' })
+      setStatus('closed')
+      setClosedInfo({ closePrice: saved.closePrice, closeReturn: saved.closeReturn, closedAt: saved.closedAt })
+      setCloseDatePickerOpen(false)
+    } catch (e) {
+      setLifecycleError(e.message)
+    } finally {
+      setLifecycleBusy(false)
+    }
+  }
+
+  const fmtDate = (value) => value ? new Date(`${value}T00:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : ''
+
   return (
     <>
       <header className="px-12 pt-6 pb-5 border-b" style={{ borderColor: 'var(--border)' }}>
@@ -168,6 +244,11 @@ export default function ThesisDetail({ navigate, thesis }) {
             <span className="font-mono">{base.ticker}</span>
           </div>
           <div className="flex items-center gap-2">
+            {isClosed
+              ? <span className="text-[10px] font-mono uppercase tracking-wider px-2 py-1 rounded" style={{ background: 'var(--bg-warm)', color: 'var(--ink-soft)' }}>Closed{closedInfo?.closedAt ? ` ${fmtStamp(closedInfo.closedAt)}` : ''}</span>
+              : closeDate
+                ? <span className="text-[10px] font-mono uppercase tracking-wider px-2 py-1 rounded" style={{ background: 'var(--warn-soft)', color: 'var(--warn)' }}>Closes {fmtDate(closeDate)}</span>
+                : null}
             <div className="seal"><i className="icon-fingerprint text-[11px]"></i> Locked {base.publishDate}</div>
           </div>
         </div>
@@ -202,8 +283,9 @@ export default function ThesisDetail({ navigate, thesis }) {
         </div>
       </header>
 
-      <div className="px-12 py-8 max-w-5xl">
-        <div className="mb-8 p-6 border rounded-md" style={{ borderColor: 'var(--border)', background: 'white' }}>
+      <div className="px-12 py-8">
+        <div className="grid grid-cols-4 gap-8 mb-8 items-start">
+          <div className="col-span-3 p-6 border rounded-md" style={{ borderColor: 'var(--border)', background: 'white' }}>
           <div className="flex items-baseline justify-between mb-4">
             <div>
               <h3 className="font-serif text-lg font-medium">Price History</h3>
@@ -259,17 +341,127 @@ export default function ThesisDetail({ navigate, thesis }) {
                 <span className="font-mono">{fmtPrice(low, currency)}</span>
               </div>
             </div>
-            <span className="font-mono pulse-dot" style={{ color: 'var(--bull)' }}>● LIVE</span>
+            {isClosed
+              ? <span className="font-mono" style={{ color: 'var(--muted)' }}>● SEALED</span>
+              : <span className="font-mono pulse-dot" style={{ color: 'var(--bull)' }}>● LIVE</span>}
+          </div>
+          </div>
+
+          <div className="col-span-1 space-y-6">
+            <div>
+              <h4 className="font-serif text-base font-medium mb-3">Thesis Controls</h4>
+              <div className="space-y-2">
+                <button
+                  onClick={openComposer}
+                  disabled={!owned}
+                  className={`w-full text-left p-3 border rounded text-xs ${owned ? 'hover:bg-gray-50' : 'opacity-50 cursor-not-allowed'}`}
+                  style={{ borderColor: 'var(--border)', background: 'transparent', cursor: owned ? 'pointer' : 'not-allowed' }}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium">Append Update</span>
+                    <i className="icon-plus text-xs"></i>
+                  </div>
+                  <p style={{ color: 'var(--muted)' }} className="mt-0.5">{owned ? 'Add timestamped note' : 'Only on your own theses'}</p>
+                </button>
+                {(() => {
+                  const scheduleActive = owned && !isClosed && !closeDate
+                  return (
+                    <button
+                      onClick={openCloseDatePicker}
+                      disabled={!scheduleActive}
+                      className={`w-full text-left p-3 border rounded text-xs ${scheduleActive ? 'hover:bg-gray-50' : 'opacity-50 cursor-not-allowed'}`}
+                      style={{ borderColor: 'var(--border)', background: 'transparent', cursor: scheduleActive ? 'pointer' : 'not-allowed' }}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="font-medium">Set Future Close Date</span>
+                        <i className="icon-calendar text-xs"></i>
+                      </div>
+                      <p style={{ color: 'var(--muted)' }} className="mt-0.5">
+                        {isClosed ? 'Thesis already closed' : closeDate ? `Sealed to close ${fmtDate(closeDate)}` : owned ? 'Non-changeable once set' : 'Only on your own theses'}
+                      </p>
+                    </button>
+                  )
+                })()}
+                {closeDatePickerOpen && (
+                  <div className="p-3 border rounded" style={{ borderColor: 'var(--border-strong)', background: 'white' }}>
+                    <label className="block text-[10px] font-mono uppercase tracking-wider mb-1.5" style={{ color: 'var(--muted)' }}>Close date · sealed on save</label>
+                    <input
+                      type="date"
+                      value={closeDateDraft}
+                      min={tomorrow}
+                      onChange={(e) => setCloseDateDraft(e.target.value)}
+                      className="w-full text-xs p-2 border rounded"
+                      style={{ borderColor: 'var(--border)', background: 'var(--bg-warm)', color: 'var(--ink)' }}
+                    />
+                    <div className="flex items-center justify-end gap-2 mt-2">
+                      <button onClick={() => { setCloseDatePickerOpen(false); setLifecycleError('') }} disabled={lifecycleBusy} className="text-xs px-2.5 py-1 border rounded" style={{ borderColor: 'var(--border)', background: 'transparent', cursor: lifecycleBusy ? 'not-allowed' : 'pointer' }}>Cancel</button>
+                      <button onClick={submitCloseDate} disabled={lifecycleBusy || !closeDateDraft} className="btn-primary text-xs px-2.5 py-1 rounded" style={{ opacity: lifecycleBusy || !closeDateDraft ? 0.5 : 1, cursor: lifecycleBusy || !closeDateDraft ? 'not-allowed' : 'pointer' }}>{lifecycleBusy ? 'Sealing…' : 'Seal date'}</button>
+                    </div>
+                  </div>
+                )}
+                {(() => {
+                  const closeActive = owned && !isClosed
+                  return (
+                    <button
+                      onClick={closeNow}
+                      disabled={!closeActive || lifecycleBusy}
+                      className={`w-full text-left p-3 border rounded text-xs ${closeActive && !lifecycleBusy ? 'hover:bg-gray-50' : 'opacity-50 cursor-not-allowed'}`}
+                      style={{ borderColor: 'var(--border)', background: 'transparent', cursor: closeActive && !lifecycleBusy ? 'pointer' : 'not-allowed' }}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="font-medium">Close Thesis Now</span>
+                        <i className="icon-check text-xs"></i>
+                      </div>
+                      <p style={{ color: 'var(--muted)' }} className="mt-0.5">
+                        {isClosed ? `Closed at ${fmtPrice(closedInfo?.closePrice ?? current, currency)}` : owned ? 'Lock final performance' : 'Only on your own theses'}
+                      </p>
+                    </button>
+                  )
+                })()}
+                {lifecycleError && <p className="text-xs ret-neg">{lifecycleError}</p>}
+              </div>
+            </div>
+
+            <div className="p-4 border rounded" style={{ borderColor: 'var(--border)', background: 'var(--bg-warm)' }}>
+              <div className="flex items-center gap-2 mb-2">
+                <i className="icon-shield-check text-sm"></i>
+                <span className="text-xs font-mono uppercase tracking-wider font-semibold">Integrity Record</span>
+              </div>
+              <div className="space-y-1.5 text-[11px] font-mono" style={{ color: 'var(--ink-soft)' }}>
+                <div className="flex justify-between"><span>Created:</span><span>{created}</span></div>
+                <div className="flex justify-between"><span>Published:</span><span>{base.publishDate}</span></div>
+                <div className="flex justify-between"><span>Entry locked:</span><span>{fmtPrice(entry, currency)}</span></div>
+                <div className="flex justify-between"><span>Edits to body:</span><span>0 permitted</span></div>
+                {isClosed
+                  ? <>
+                      <div className="flex justify-between"><span>Closed:</span><span>{closedInfo?.closedAt ? fmtStamp(closedInfo.closedAt) : '—'}</span></div>
+                      <div className="flex justify-between"><span>Close locked:</span><span>{fmtPrice(closedInfo?.closePrice ?? current, currency)}</span></div>
+                    </>
+                  : closeDate
+                    ? <div className="flex justify-between"><span>Close scheduled:</span><span>{fmtDate(closeDate)}</span></div>
+                    : <div className="flex justify-between"><span>Status:</span><span>Active</span></div>}
+              </div>
+            </div>
           </div>
         </div>
 
-        <div className="grid grid-cols-3 gap-8">
-          <div className="col-span-2">
+        <div className="grid grid-cols-4 gap-8">
+          <div className="col-span-3">
             {base.body
               ? <article className="editor-content" style={{ minHeight: 'auto' }} dangerouslySetInnerHTML={{ __html: base.body }} />
               : <article className="font-serif text-[17px] leading-[1.75]" style={{ color: 'var(--ink-soft)' }}>
                   <p>The full thesis text isn’t available for this entry.</p>
                 </article>}
+
+            {modelHasContent(base.model) && (
+              <div className="mt-12">
+                <div className="mb-4">
+                  <h3 className="font-serif text-xl font-medium">Financial Model</h3>
+                  <p className="text-xs mt-0.5" style={{ color: 'var(--muted)' }}>Sealed at publication · Read-only · Formulas evaluated live</p>
+                </div>
+                <SpreadsheetViewer model={base.model} />
+              </div>
+            )}
 
             <div className="mt-12">
               <div className="flex items-baseline justify-between mb-5">
@@ -382,59 +574,6 @@ export default function ThesisDetail({ navigate, thesis }) {
                 </div>
               </div>
               <p className="text-[10px] font-mono mt-2" style={{ color: 'var(--faint)' }}>Live via Yahoo Finance · TTM figures in reporting currency</p>
-            </div>
-
-            <div>
-              <h4 className="font-serif text-base font-medium mb-3">Thesis Controls</h4>
-              <div className="space-y-2">
-                <button
-                  onClick={openComposer}
-                  disabled={!owned}
-                  className={`w-full text-left p-3 border rounded text-xs ${owned ? 'hover:bg-gray-50' : 'opacity-50 cursor-not-allowed'}`}
-                  style={{ borderColor: 'var(--border)', background: 'transparent', cursor: owned ? 'pointer' : 'not-allowed' }}
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="font-medium">Append Update</span>
-                    <i className="icon-plus text-xs"></i>
-                  </div>
-                  <p style={{ color: 'var(--muted)' }} className="mt-0.5">{owned ? 'Add timestamped note' : 'Only on your own theses'}</p>
-                </button>
-                <button className="w-full text-left p-3 border rounded text-xs hover:bg-gray-50" style={{ borderColor: 'var(--border)', background: 'transparent', cursor: 'pointer' }}>
-                  <div className="flex items-center justify-between">
-                    <span className="font-medium">Set Future Close Date</span>
-                    <i className="icon-calendar text-xs"></i>
-                  </div>
-                  <p style={{ color: 'var(--muted)' }} className="mt-0.5">Non-changeable once set</p>
-                </button>
-                <button className="w-full text-left p-3 border rounded text-xs hover:bg-gray-50" style={{ borderColor: 'var(--border)', background: 'transparent', cursor: 'pointer' }}>
-                  <div className="flex items-center justify-between">
-                    <span className="font-medium">Close Thesis Now</span>
-                    <i className="icon-check text-xs"></i>
-                  </div>
-                  <p style={{ color: 'var(--muted)' }} className="mt-0.5">Lock final performance</p>
-                </button>
-                <button disabled className="w-full text-left p-3 border rounded text-xs opacity-50 cursor-not-allowed" style={{ borderColor: 'var(--border)', background: 'transparent' }}>
-                  <div className="flex items-center justify-between">
-                    <span className="font-medium">Delete Thesis</span>
-                    <i className="icon-lock text-xs"></i>
-                  </div>
-                  <p style={{ color: 'var(--muted)' }} className="mt-0.5">Disabled — integrity protected</p>
-                </button>
-              </div>
-            </div>
-
-            <div className="p-4 border rounded" style={{ borderColor: 'var(--border)', background: 'var(--bg-warm)' }}>
-              <div className="flex items-center gap-2 mb-2">
-                <i className="icon-shield-check text-sm"></i>
-                <span className="text-xs font-mono uppercase tracking-wider font-semibold">Integrity Record</span>
-              </div>
-              <div className="space-y-1.5 text-[11px] font-mono" style={{ color: 'var(--ink-soft)' }}>
-                <div className="flex justify-between"><span>Created:</span><span>{created}</span></div>
-                <div className="flex justify-between"><span>Published:</span><span>{base.publishDate}</span></div>
-                <div className="flex justify-between"><span>Entry locked:</span><span>{fmtPrice(entry, currency)}</span></div>
-                <div className="flex justify-between"><span>Edits to body:</span><span>0 permitted</span></div>
-                <div className="flex justify-between"><span>Deletions:</span><span>0 permitted</span></div>
-              </div>
             </div>
           </div>
         </div>

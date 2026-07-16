@@ -80,6 +80,9 @@ export async function POST(request) {
     resolvedSymbol: lock.resolvedSymbol,
     exchange: lock.exchange,
     body: typeof body?.body === 'string' ? body.body : '',
+    // The financial model built in the editor's spreadsheet. Sealed with the
+    // thesis so it renders read-only on the published page, like the entry price.
+    model: body?.model && typeof body.model === 'object' ? body.model : null,
     createdAt: nowIso,
   }
 

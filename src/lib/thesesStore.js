@@ -52,6 +52,25 @@ export async function addThesis(thesis) {
   return result
 }
 
+// Merges a partial patch into a thesis, identified by id. Returns the updated
+// record, or null if no thesis with that id exists. The caller is responsible
+// for validating the patch (e.g. that a close date isn't already sealed).
+export async function updateThesis(id, patch) {
+  const result = writeChain.then(async () => {
+    const all = await readAll()
+    const idx = all.findIndex((t) => String(t.id) === String(id))
+    if (idx === -1) return null
+
+    const updated = { ...all[idx], ...patch }
+    const next = [...all]
+    next[idx] = updated
+    await writeAll(next)
+    return updated
+  })
+  writeChain = result.catch(() => {})
+  return result
+}
+
 // Appends a timestamped update note to a thesis. The note text comes from the
 // author; the timestamp is stamped server-side so it can't be backdated — the
 // same integrity guarantee that seals the entry price. Returns the appended
