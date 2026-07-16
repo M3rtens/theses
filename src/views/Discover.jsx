@@ -1,6 +1,25 @@
+import { useMemo, useState } from 'react'
 import { sampleDiscover } from '../data/theses.js'
 
 export default function Discover({ navigate }) {
+  // Title search and security-type (sector) filter over the community feed.
+  const [query, setQuery] = useState('')
+  const [sector, setSector] = useState('all')
+
+  const sectors = useMemo(
+    () => [...new Set(sampleDiscover.map((t) => t.sector).filter(Boolean))].sort(),
+    [],
+  )
+
+  const results = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    return sampleDiscover.filter((t) => {
+      if (sector !== 'all' && t.sector !== sector) return false
+      if (q && !t.title.toLowerCase().includes(q)) return false
+      return true
+    })
+  }, [query, sector])
+
   return (
     <>
       <header className="px-12 pt-8 pb-6 border-b" style={{ borderColor: 'var(--border)' }}>
@@ -16,11 +35,44 @@ export default function Discover({ navigate }) {
             <button className="lb-filter text-xs px-3 py-1 rounded">Top Performers</button>
           </div>
         </div>
+
+        <div className="flex items-center flex-wrap gap-3 mt-6">
+          <div className="relative flex-1 min-w-64 max-w-md">
+            <i className="icon-search text-sm absolute left-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--muted)' }}></i>
+            <input
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search theses by title…"
+              className="w-full text-sm pl-9 pr-3 py-2 border rounded-md"
+              style={{ borderColor: 'var(--border)', background: 'white', color: 'var(--ink)' }}
+            />
+          </div>
+          <select
+            value={sector}
+            onChange={(e) => setSector(e.target.value)}
+            aria-label="Filter by security type"
+            className="text-sm px-3 py-2 border rounded-md"
+            style={{ borderColor: 'var(--border)', background: 'white', color: 'var(--ink)' }}
+          >
+            <option value="all">All securities</option>
+            {sectors.map((s) => (
+              <option key={s} value={s}>{s}</option>
+            ))}
+          </select>
+          <span className="text-xs font-mono ml-auto" style={{ color: 'var(--muted)' }}>{results.length} of {sampleDiscover.length}</span>
+        </div>
       </header>
 
       <div className="px-12 py-8">
+        {results.length === 0 && (
+          <div className="p-6 border rounded-md text-center" style={{ borderColor: 'var(--border)', background: 'var(--bg)' }}>
+            <div className="font-serif text-lg font-medium">No theses match</div>
+            <p className="text-xs mt-1" style={{ color: 'var(--muted)' }}>Try a different title search or security type.</p>
+          </div>
+        )}
         <div className="grid grid-cols-2 gap-6">
-          {sampleDiscover.map((t, i) => {
+          {results.map((t, i) => {
             const retClass = t.ret >= 0 ? 'ret-pos' : 'ret-neg'
             const sign = t.ret >= 0 ? '+' : '−'
             const sideClass = t.side === 'bull' ? 'side-bull' : 'side-bear'
@@ -43,6 +95,7 @@ export default function Discover({ navigate }) {
 
                 <div className="flex items-center gap-2 mb-2">
                   <span className="font-mono text-sm font-semibold">{t.ticker}</span>
+                  {t.sector && <span className="text-[9px] font-mono px-1.5 py-0.5 rounded" style={{ background: 'var(--bg-warm)', color: 'var(--muted)', border: '1px solid var(--border)' }}>{t.sector}</span>}
                   <span className="text-[10px] font-mono" style={{ color: 'var(--muted)' }}>·</span>
                   <span className={`font-mono text-sm font-semibold ${retClass}`}>{sign}{Math.abs(t.ret).toFixed(1)}%</span>
                   <span className="text-[10px] font-mono" style={{ color: 'var(--muted)' }}>since publish</span>
