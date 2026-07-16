@@ -51,3 +51,28 @@ export async function addThesis(thesis) {
   writeChain = result.catch(() => {})
   return result
 }
+
+// Appends a timestamped update note to a thesis. The note text comes from the
+// author; the timestamp is stamped server-side so it can't be backdated — the
+// same integrity guarantee that seals the entry price. Returns the appended
+// update record, or null if no thesis with that id exists.
+export async function appendUpdate(id, text) {
+  const result = writeChain.then(async () => {
+    const all = await readAll()
+    const idx = all.findIndex((t) => String(t.id) === String(id))
+    if (idx === -1) return null
+
+    const thesis = all[idx]
+    const log = Array.isArray(thesis.updateLog) ? thesis.updateLog : []
+    const nextId = log.reduce((m, u) => Math.max(m, Number(u.id) || 0), 0) + 1
+    const update = { id: nextId, text, at: new Date().toISOString() }
+
+    const updated = { ...thesis, updateLog: [...log, update], updates: log.length + 1 }
+    const next = [...all]
+    next[idx] = updated
+    await writeAll(next)
+    return update
+  })
+  writeChain = result.catch(() => {})
+  return result
+}

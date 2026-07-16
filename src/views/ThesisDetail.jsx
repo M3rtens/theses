@@ -105,7 +105,56 @@ export default function ThesisDetail({ navigate, thesis }) {
   const retClass = ret >= 0 ? 'ret-pos' : 'ret-neg'
   const retSign = ret >= 0 ? '+' : '−'
 
-  const created = base.createdAt ? new Date(base.createdAt).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : base.publishDate
+  const fmtStamp = (iso) => new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+  const created = base.createdAt ? fmtStamp(base.createdAt) : base.publishDate
+
+  // Appending updates is only permitted on a thesis you own — i.e. one persisted
+  // in the store (it carries a server-stamped createdAt). Sample theses are
+  // read-only demos, so the composer stays closed for them.
+  const owned = Boolean(base.createdAt)
+
+  // The update log, seeded from the stored thesis and grown in place as the
+  // author appends notes, so newly saved updates appear without a reload.
+  const [updateLog, setUpdateLog] = useState(() =>
+    Array.isArray(base.updateLog) ? base.updateLog : []
+  )
+  const [composerOpen, setComposerOpen] = useState(false)
+  const [draft, setDraft] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState('')
+
+  const openComposer = () => {
+    if (!owned) return
+    setSaveError('')
+    setComposerOpen(true)
+  }
+
+  const submitUpdate = async () => {
+    const text = draft.trim()
+    if (!text || saving) return
+    setSaving(true)
+    setSaveError('')
+    try {
+      const res = await fetch(`/api/theses/${base.id}/updates`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ text }),
+      })
+      const saved = await res.json()
+      if (!res.ok) throw new Error(saved?.error || `HTTP ${res.status}`)
+      setUpdateLog((log) => [...log, saved])
+      setDraft('')
+      setComposerOpen(false)
+    } catch (e) {
+      setSaveError(e.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const updateCount = updateLog.length
+  // Owned theses track their log locally; samples keep their static demo count.
+  const displayUpdates = owned ? updateCount : (base.updates || 0)
 
   return (
     <>
@@ -138,7 +187,7 @@ export default function ThesisDetail({ navigate, thesis }) {
               <span>·</span>
               <span className="font-mono">Published {base.publishDate}</span>
               <span>·</span>
-              <span>{base.updates || 0} update{base.updates === 1 ? '' : 's'}</span>
+              <span>{displayUpdates} update{displayUpdates === 1 ? '' : 's'}</span>
               <span>·</span>
               <span className="font-mono">{base.daysActive ?? 0} days active</span>
             </div>
@@ -225,15 +274,65 @@ export default function ThesisDetail({ navigate, thesis }) {
             <div className="mt-12">
               <div className="flex items-baseline justify-between mb-5">
                 <h3 className="font-serif text-xl font-medium">Thesis Updates</h3>
-                <button className="text-xs font-medium flex items-center gap-1.5 px-3 py-1.5 border rounded-md" style={{ borderColor: 'var(--border-strong)', background: 'transparent', cursor: 'pointer' }}>
-                  <i className="icon-plus text-xs"></i> Append Update
-                </button>
+                {owned && !composerOpen && (
+                  <button onClick={openComposer} className="text-xs font-medium flex items-center gap-1.5 px-3 py-1.5 border rounded-md" style={{ borderColor: 'var(--border-strong)', background: 'transparent', cursor: 'pointer' }}>
+                    <i className="icon-plus text-xs"></i> Append Update
+                  </button>
+                )}
               </div>
-              <p className="text-sm" style={{ color: 'var(--muted)' }}>
-                {base.updates > 0
-                  ? `${base.updates} update${base.updates === 1 ? '' : 's'} recorded on this thesis.`
-                  : 'No updates appended yet.'}
-              </p>
+
+              {composerOpen && (
+                <div className="mb-6 p-4 border rounded-md" style={{ borderColor: 'var(--border-strong)', background: 'white' }}>
+                  <div className="text-[10px] font-mono uppercase tracking-wider mb-2" style={{ color: 'var(--muted)' }}>New Update · timestamp sealed on save</div>
+                  <textarea
+                    autoFocus
+                    value={draft}
+                    onChange={(e) => setDraft(e.target.value)}
+                    placeholder="What changed in the thesis? Note the development and its implications…"
+                    rows={4}
+                    className="w-full text-sm p-3 border rounded resize-y"
+                    style={{ borderColor: 'var(--border)', background: 'var(--bg-warm)', color: 'var(--ink)' }}
+                  />
+                  {saveError && <p className="text-xs mt-2 ret-neg">{saveError}</p>}
+                  <div className="flex items-center justify-end gap-2 mt-3">
+                    <button
+                      onClick={() => { setComposerOpen(false); setSaveError(''); setDraft('') }}
+                      disabled={saving}
+                      className="text-xs px-3 py-1.5 border rounded-md"
+                      style={{ borderColor: 'var(--border)', background: 'transparent', cursor: saving ? 'not-allowed' : 'pointer' }}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={submitUpdate}
+                      disabled={saving || !draft.trim()}
+                      className="btn-primary text-xs px-3 py-1.5 rounded-md"
+                      style={{ opacity: saving || !draft.trim() ? 0.5 : 1, cursor: saving || !draft.trim() ? 'not-allowed' : 'pointer' }}
+                    >
+                      {saving ? 'Sealing…' : 'Append Update'}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {updateCount > 0 ? (
+                <ol className="space-y-4">
+                  {[...updateLog].reverse().map((u) => (
+                    <li key={u.id} className="pl-4 border-l-2" style={{ borderColor: 'var(--border-strong)' }}>
+                      <div className="text-[10px] font-mono uppercase tracking-wider mb-1" style={{ color: 'var(--muted)' }}>
+                        <i className="icon-fingerprint text-[10px]"></i> {fmtStamp(u.at)}
+                      </div>
+                      <p className="text-sm leading-relaxed whitespace-pre-wrap" style={{ color: 'var(--ink-soft)' }}>{u.text}</p>
+                    </li>
+                  ))}
+                </ol>
+              ) : (
+                !composerOpen && (
+                  <p className="text-sm" style={{ color: 'var(--muted)' }}>
+                    {owned ? 'No updates appended yet.' : `${displayUpdates} update${displayUpdates === 1 ? '' : 's'} recorded on this thesis.`}
+                  </p>
+                )
+              )}
             </div>
           </div>
 
@@ -288,12 +387,17 @@ export default function ThesisDetail({ navigate, thesis }) {
             <div>
               <h4 className="font-serif text-base font-medium mb-3">Thesis Controls</h4>
               <div className="space-y-2">
-                <button className="w-full text-left p-3 border rounded text-xs hover:bg-gray-50" style={{ borderColor: 'var(--border)', background: 'transparent', cursor: 'pointer' }}>
+                <button
+                  onClick={openComposer}
+                  disabled={!owned}
+                  className={`w-full text-left p-3 border rounded text-xs ${owned ? 'hover:bg-gray-50' : 'opacity-50 cursor-not-allowed'}`}
+                  style={{ borderColor: 'var(--border)', background: 'transparent', cursor: owned ? 'pointer' : 'not-allowed' }}
+                >
                   <div className="flex items-center justify-between">
                     <span className="font-medium">Append Update</span>
                     <i className="icon-plus text-xs"></i>
                   </div>
-                  <p style={{ color: 'var(--muted)' }} className="mt-0.5">Add timestamped note</p>
+                  <p style={{ color: 'var(--muted)' }} className="mt-0.5">{owned ? 'Add timestamped note' : 'Only on your own theses'}</p>
                 </button>
                 <button className="w-full text-left p-3 border rounded text-xs hover:bg-gray-50" style={{ borderColor: 'var(--border)', background: 'transparent', cursor: 'pointer' }}>
                   <div className="flex items-center justify-between">
