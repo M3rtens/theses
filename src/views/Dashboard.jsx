@@ -1,5 +1,6 @@
 import ThesisCard from '../components/ThesisCard.jsx'
 import { leaderboardData } from '../data/theses.js'
+import { relativeTime } from '../lib/drafts.js'
 import { useLiveTheses } from '../lib/useLiveTheses.js'
 import { useStoredTheses } from '../lib/useStoredTheses.js'
 
@@ -45,12 +46,24 @@ export default function Dashboard({ navigate }) {
   const alertColor = (status) => (status === 'breached' ? '--bear' : '--warn')
   const alertLabel = (status) => (status === 'breached' ? 'BREACHED' : 'WARNING')
 
+  // Recent updates, drawn from every thesis's server-sealed update log (appended
+  // via POST /api/theses/:id/updates, timestamped server-side). Flattened across
+  // theses and shown newest first. u.id is the per-thesis sequence number, so it
+  // doubles as the "Update #N" label.
+  const recentUpdates = allTheses
+    .flatMap((t) => (Array.isArray(t.updateLog) ? t.updateLog : []).map((u) => ({ ...u, thesis: t })))
+    .sort((a, b) => new Date(b.at) - new Date(a.at))
+    .slice(0, 5)
+
+  // Greeting keyed to the viewer's local time of day.
+  const hour = new Date().getHours()
+  const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening'
+
   return (
     <>
       <header className="px-12 pt-8 pb-6 flex items-end justify-between border-b" style={{ borderColor: 'var(--border)' }}>
         <div>
-          <div className="text-[10px] font-mono uppercase tracking-wider mb-1" style={{ color: 'var(--muted)' }}>Thursday, March 14 · 16:32 EST</div>
-          <h1 className="font-serif text-3xl font-medium tracking-tight">Good afternoon, Elena.</h1>
+          <h1 className="font-serif text-3xl font-medium tracking-tight">{greeting}, Elena.</h1>
           <p className="text-sm mt-1" style={{ color: 'var(--ink-soft)' }}>You have <span style={{ color: alerts.length ? 'var(--bear)' : 'var(--ink-soft)', fontWeight: 500 }}>{alerts.length} trigger alert{alerts.length === 1 ? '' : 's'}</span> and <span style={{ fontWeight: 500 }}>1 draft</span> awaiting review.</p>
         </div>
         <div className="flex items-center gap-3">
@@ -141,18 +154,22 @@ export default function Dashboard({ navigate }) {
                 <h2 className="font-serif text-xl font-medium">Recent Updates</h2>
               </div>
               <div className="space-y-4 text-sm">
-                <div className="border-l-2 pl-3" style={{ borderColor: 'var(--border-strong)' }}>
-                  <div className="text-[10px] font-mono uppercase tracking-wider" style={{ color: 'var(--muted)' }}>2 days ago · ASML</div>
-                  <p className="leading-snug mt-0.5">Update #3: Q4 backlog expanded to €36B. EUV shipments tracking above forecast.</p>
-                </div>
-                <div className="border-l-2 pl-3" style={{ borderColor: 'var(--border-strong)' }}>
-                  <div className="text-[10px] font-mono uppercase tracking-wider" style={{ color: 'var(--muted)' }}>5 days ago · CRWD</div>
-                  <p className="leading-snug mt-0.5">Update #2: Falcon platform ARR growth reaccelerated to 34%.</p>
-                </div>
-                <div className="border-l-2 pl-3" style={{ borderColor: 'var(--border-strong)' }}>
-                  <div className="text-[10px] font-mono uppercase tracking-wider" style={{ color: 'var(--muted)' }}>1 week ago · CVX</div>
-                  <p className="leading-snug mt-0.5">Update #1: Hess acquisition closed. Permian synergies materializing ahead of schedule.</p>
-                </div>
+                {recentUpdates.length === 0 && (
+                  <div className="p-4 border" style={{ borderColor: 'var(--border)', background: 'var(--bg)' }}>
+                    <p className="text-sm leading-snug" style={{ color: 'var(--ink-soft)' }}>No updates appended yet. Updates you append to a thesis will appear here.</p>
+                  </div>
+                )}
+                {recentUpdates.map((u) => (
+                  <button
+                    key={`${u.thesis.id}-${u.id}`}
+                    onClick={() => navigate('thesis', u.thesis)}
+                    className="border-l-2 pl-3 block w-full text-left"
+                    style={{ borderColor: 'var(--border-strong)', background: 'transparent', cursor: 'pointer' }}
+                  >
+                    <div className="text-[10px] font-mono uppercase tracking-wider" style={{ color: 'var(--muted)' }}>{relativeTime(new Date(u.at).getTime())} · {u.thesis.ticker}</div>
+                    <p className="leading-snug mt-0.5">Update #{u.id}: {u.text}</p>
+                  </button>
+                ))}
               </div>
             </div>
           </div>
