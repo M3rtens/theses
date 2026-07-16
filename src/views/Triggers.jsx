@@ -1,13 +1,19 @@
 import { sampleTheses } from '../data/theses.js'
+import { useStoredTheses } from '../lib/useStoredTheses.js'
 
 export default function Triggers({ navigate }) {
+  // Stored (user-published) theses first — loading them recomputes their trigger
+  // statuses against the latest filings — then the sample set for demo colour.
+  const stored = useStoredTheses()
+  const allTheses = [...stored, ...sampleTheses]
+
   const breached = []
   const warning = []
   const clear = []
 
-  sampleTheses.forEach(t => {
-    if (t.status !== 'active') return
-    t.triggers.forEach(trig => {
+  allTheses.forEach((t) => {
+    if (t.status === 'closed') return
+    ;(t.triggers || []).forEach((trig) => {
       const item = { ...trig, thesis: t }
       if (trig.s === 'breached') breached.push(item)
       else if (trig.s === 'warning') warning.push(item)
@@ -32,12 +38,12 @@ export default function Triggers({ navigate }) {
               </div>
               <div className="flex-1">
                 <div className="text-sm font-medium">{item.c}</div>
-                <div className="text-xs mt-1" style={{ color: 'var(--ink-soft)' }}>From: "{item.thesis.title}"</div>
+                <div className="text-xs mt-1" style={{ color: 'var(--ink-soft)' }}>From: &ldquo;{item.thesis.title}&rdquo;</div>
               </div>
               <div className="text-right">
                 <div className="text-[10px] font-mono uppercase tracking-wider" style={{ color: `var(${colorVar})` }}>{item.s.toUpperCase()}</div>
               </div>
-              <button onClick={() => navigate('thesis')} className="text-xs font-medium px-3 py-1.5 border rounded" style={{ borderColor: `var(${colorVar})`, color: `var(${colorVar})`, background: 'transparent', cursor: 'pointer' }}>Review</button>
+              <button onClick={() => navigate('thesis', item.thesis)} className="text-xs font-medium px-3 py-1.5 border rounded" style={{ borderColor: `var(${colorVar})`, color: `var(${colorVar})`, background: 'transparent', cursor: 'pointer' }}>Review</button>
             </div>
           ))}
         </div>
@@ -51,29 +57,32 @@ export default function Triggers({ navigate }) {
         <div>
           <div className="text-[10px] font-mono uppercase tracking-wider mb-1" style={{ color: 'var(--muted)' }}>Automated Monitoring</div>
           <h1 className="font-serif text-3xl font-medium tracking-tight">Trigger Dashboard</h1>
-          <p className="text-sm mt-1" style={{ color: 'var(--ink-soft)' }}>Real-time monitoring of invalidation conditions across all active theses.</p>
+          <p className="text-sm mt-1" style={{ color: 'var(--ink-soft)' }}>Financial triggers are re-evaluated against the latest filings each time this page loads.</p>
         </div>
 
         <div className="grid grid-cols-3 gap-px mt-6" style={{ background: 'var(--border)' }}>
           <div className="p-4" style={{ background: 'var(--bg)' }}>
             <div className="text-[10px] font-mono uppercase tracking-wider mb-1" style={{ color: 'var(--bear)' }}>Breached</div>
-            <div className="font-serif text-3xl font-medium" style={{ color: 'var(--bear)' }}>1</div>
+            <div className="font-serif text-3xl font-medium" style={{ color: 'var(--bear)' }}>{breached.length}</div>
             <div className="text-[11px] font-mono mt-1" style={{ color: 'var(--ink-soft)' }}>Requires immediate review</div>
           </div>
           <div className="p-4" style={{ background: 'var(--bg)' }}>
             <div className="text-[10px] font-mono uppercase tracking-wider mb-1" style={{ color: 'var(--warn)' }}>Warning</div>
-            <div className="font-serif text-3xl font-medium" style={{ color: 'var(--warn)' }}>1</div>
+            <div className="font-serif text-3xl font-medium" style={{ color: 'var(--warn)' }}>{warning.length}</div>
             <div className="text-[11px] font-mono mt-1" style={{ color: 'var(--ink-soft)' }}>Approaching threshold</div>
           </div>
           <div className="p-4" style={{ background: 'var(--bg)' }}>
             <div className="text-[10px] font-mono uppercase tracking-wider mb-1" style={{ color: 'var(--bull)' }}>Clear</div>
-            <div className="font-serif text-3xl font-medium" style={{ color: 'var(--bull)' }}>9</div>
+            <div className="font-serif text-3xl font-medium" style={{ color: 'var(--bull)' }}>{clear.length}</div>
             <div className="text-[11px] font-mono mt-1" style={{ color: 'var(--ink-soft)' }}>Within safe parameters</div>
           </div>
         </div>
       </header>
 
       <div className="px-12 py-8 space-y-8">
+        {breached.length + warning.length + clear.length === 0 && (
+          <p className="text-sm" style={{ color: 'var(--muted)' }}>No triggers defined across your active theses yet.</p>
+        )}
         {renderGroup('Breached', breached, '--bear', '--bear-soft')}
         {renderGroup('Warning', warning, '--warn', '--warn-soft')}
         {renderGroup('Clear', clear, '--bull', '--bull-soft')}

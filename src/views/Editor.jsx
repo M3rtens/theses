@@ -3,6 +3,8 @@ import SecuritySearch from '../components/SecuritySearch.jsx'
 import { fmtPrice, currencySymbol } from '../lib/format.js'
 import { saveDraft as persistDraft } from '../lib/drafts.js'
 import SpreadsheetEditor from '../components/SpreadsheetEditor.jsx'
+import { latestMetric, formatMetricValue, triggerLabel, evaluateTrigger, comparisonsOf } from '../lib/triggers.js'
+import TriggerComposer from '../components/TriggerComposer.jsx'
 
 const EMBED_HTML = '<div contenteditable="false" class="my-4 p-4 border rounded" style="border-color: var(--border); background: var(--bg-warm);"><div class="text-[10px] font-mono uppercase tracking-wider" style="color: var(--muted);">Embedded Chart</div><div class="text-sm font-medium mt-1">Revenue &amp; Margin Trajectory</div><div class="text-xs mt-1" style="color: var(--ink-soft);">Linked to model · auto-updates</div></div>'
 
@@ -11,6 +13,13 @@ const STMT_TABS = [
   { key: 'balance', label: 'Balance Sheet' },
   { key: 'cashflow', label: 'Cash Flow' },
 ]
+
+// Live status chip styling for a trigger being built against fetched financials.
+const TRIGGER_STATUS_STYLE = {
+  breached: { label: 'BREACHED', color: 'var(--bear)', soft: 'var(--bear-soft)' },
+  warning: { label: 'WARNING', color: 'var(--warn)', soft: 'var(--warn-soft)' },
+  clear: { label: 'CLEAR', color: 'var(--bull)', soft: 'var(--bull-soft)' },
+}
 
 const SLASH_ITEMS = [
   { action: 'h1', icon: <span className="font-serif font-semibold text-xs">H1</span>, label: 'Heading 1', desc: 'Large section heading' },
@@ -51,9 +60,23 @@ const formatPublicationDate = (value) => dateFromValue(value).toLocaleDateString
 const WEEKDAYS = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su']
 
 export default function Editor({ draft = null, navigate, showToast, onOpenPublish }) {
-  // Rebuild the internal trigger shape from a saved draft's compact { c, s } rows.
+  // Rebuild the internal trigger shape from a saved draft's structured rows.
   const draftTriggers = draft?.triggers?.length
-    ? draft.triggers.map((t, i) => ({ id: i + 1, condition: t.c, metric: 'Custom', threshold: '—', current: '—', status: t.s }))
+    ? draft.triggers.map((t, i) => ({
+        id: i + 1,
+        metric: t.metric || '',
+        statement: t.statement || 'income',
+        kind: t.kind || 'money',
+        period: t.period || 'annual',
+        currency: t.currency || '',
+        comparisons: Array.isArray(t.comparisons) && t.comparisons.length
+          ? t.comparisons
+          : (t.op && t.value != null ? [{ op: t.op, value: Number(t.value), scale: t.scale || 'M', connector: null }] : []),
+        connectors: Array.isArray(t.connectors) ? t.connectors : [],
+        op: t.op || '<',
+        value: t.value ?? null,
+        scale: t.scale || 'M',
+      }))
     : null
 
   const [side, setSide] = useState(draft?.side || 'bull')
@@ -127,12 +150,12 @@ export default function Editor({ draft = null, navigate, showToast, onOpenPublis
     return () => { cancelled = true }
   }, [security?.symbol])
 
-  // Lazily load full statements the first time the Financials tab is opened for a
-  // security, and whenever the security changes while it's open. Kept off the
-  // entry-price preview so selecting a security stays fast.
+  // Load full statements whenever a security is selected. They feed both the
+  // Financials tab and the invalidation-trigger builder (which ties each trigger
+  // to a real statement line item), so they can't wait for the tab to open.
   useEffect(() => {
     const symbol = security?.symbol
-    if (activeTab !== 'financials' || !symbol) return
+    if (!symbol) { setStatements(null); stmtSymbol.current = null; return }
     if (stmtSymbol.current === symbol) return // already loaded for this symbol
     let cancelled = false
     setStmtLoading(true)
@@ -143,7 +166,7 @@ export default function Editor({ draft = null, navigate, showToast, onOpenPublis
       .catch(() => { if (!cancelled) stmtSymbol.current = null })
       .finally(() => { if (!cancelled) setStmtLoading(false) })
     return () => { cancelled = true }
-  }, [activeTab, security?.symbol])
+  }, [security?.symbol])
 
   // Format a raw statement value for display. money → millions (accounting
   // parentheses for negatives); perShare → currency + 2dp; shares → millions.
@@ -160,6 +183,33 @@ export default function Editor({ draft = null, navigate, showToast, onOpenPublis
 
   const activeStmt = statements?.[stmtView]?.[stmtPeriod]
 
+  // A trigger's usable comparisons — those with a finite threshold.
+  const validComparisons = (t) => comparisonsOf(t).filter((c) => Number.isFinite(Number(c.value)))
+
+  // Serialise one editor trigger into its stored form. Carries the structured
+  // fields (metric/statement/period/comparisons) so it can be re-evaluated against
+  // live financials, plus a human-readable label `c` and its current status `s`.
+  const toStoredTrigger = (t) => {
+    const currency = t.currency || statements?.currency || ''
+    const comparisons = validComparisons(t).map((c) => ({ op: c.op, value: Number(c.value), scale: c.scale || 'M', connector: c.connector || null }))
+    const first = comparisons[0] || {}
+    const structured = {
+      metric: t.metric || '', statement: t.statement || 'income', period: t.period || 'annual',
+      kind: t.kind || 'money', currency, comparisons,
+      connectors: comparisons.slice(1).map((c) => c.connector || 'and'),
+      op: first.op || '<', value: first.value ?? null, scale: first.scale || 'M',
+    }
+    const complete = Boolean(t.metric) && comparisons.length > 0
+    const { status } = complete ? evaluateTrigger({ ...structured, s: 'clear' }, statements) : { status: 'clear' }
+    return {
+      ...structured,
+      c: complete ? triggerLabel(structured) : (t.metric || 'Incomplete trigger'),
+      s: status,
+    }
+  }
+
+  const triggerIncomplete = (t) => !t.metric || validComparisons(t).length === 0
+
   // Gather the editor's fields into the payload the create endpoint expects.
   const buildThesis = () => ({
     title: titleRef.current?.value?.trim() || '',
@@ -168,7 +218,7 @@ export default function Editor({ draft = null, navigate, showToast, onOpenPublis
     sector: sectorRef.current?.value || '',
     side,
     body: editorRef.current?.innerHTML || '',
-    triggers: triggers.map((t) => ({ c: t.condition, s: t.status })),
+    triggers: triggers.map(toStoredTrigger),
     model,
     scheduledPublicationDate: useFuturePublication ? scheduledPublicationDate : null,
   })
@@ -177,6 +227,10 @@ export default function Editor({ draft = null, navigate, showToast, onOpenPublis
     const draft = buildThesis()
     if (!draft.title || !draft.ticker) {
       showToast('Add a title and select a security before publishing.')
+      return
+    }
+    if (triggers.some(triggerIncomplete)) {
+      showToast('Finish each trigger — pick a line item and enter a threshold — or remove it before publishing.')
       return
     }
     onOpenPublish(draft)
@@ -359,11 +413,13 @@ export default function Editor({ draft = null, navigate, showToast, onOpenPublis
         const triggerId = Number(trigger.id)
         return Number.isFinite(triggerId) ? Math.max(maxId, triggerId) : maxId
       }, 0) + 1
-      return [...prev, { id, condition: 'New trigger condition…', metric: 'Custom', threshold: '—', current: '—', status: 'clear' }]
+      return [...prev, { id, metric: '', statement: 'income', kind: 'money', period: '', currency: statements?.currency || '', comparisons: [], connectors: [] }]
     })
   }
   const removeTrigger = (id) => setTriggers(prev => prev.filter(t => t.id !== id))
-  const updateTrigger = (id, value) => setTriggers(prev => prev.map(t => t.id === id ? { ...t, condition: value } : t))
+
+  // The composer emits the fully structured trigger; merge it back, keeping id.
+  const updateTriggerFromComposer = (id, structured) => setTriggers(prev => prev.map(t => t.id === id ? { ...structured, id } : t))
 
   const saveDraft = () => {
     const built = buildThesis()
@@ -593,25 +649,53 @@ export default function Editor({ draft = null, navigate, showToast, onOpenPublis
         </div>
 
         <div className="mb-8">
-          <div className="flex items-baseline justify-between mb-3">
+          <div className="flex items-center justify-between gap-4 mb-3">
             <div>
               <h3 className="font-serif text-lg font-medium">Invalidation Triggers</h3>
-              <p className="text-xs mt-0.5" style={{ color: 'var(--ink-soft)' }}>Define conditions that would break this thesis. The app monitors them automatically.</p>
+              <p className="text-xs mt-0.5" style={{ color: 'var(--ink-soft)' }}>Tie each condition to a reported financial line item. The app tracks it against the security&rsquo;s filings and flags the thesis when the condition holds.</p>
             </div>
-            <button onClick={addTrigger} className="text-xs font-medium flex items-center gap-1.5 px-3 py-1.5 border rounded-md hover:bg-gray-50" style={{ borderColor: 'var(--border-strong)', background: 'transparent', cursor: 'pointer' }}>
+            <button onClick={addTrigger} disabled={!security || !statements} className={`shrink-0 text-xs font-medium inline-flex items-center gap-1.5 px-3 py-1.5 border rounded-md ${security && statements ? 'hover:bg-gray-50' : 'opacity-50 cursor-not-allowed'}`} style={{ borderColor: 'var(--border-strong)', background: 'transparent', cursor: security && statements ? 'pointer' : 'not-allowed' }}>
               <i className="icon-plus text-xs"></i> Add Trigger
             </button>
           </div>
-          <div className="space-y-2">
-            {triggers.map(t => (
-              <div key={t.id} className="flex items-center gap-3 p-3 border rounded-md" style={{ borderColor: 'var(--border)', background: 'white' }}>
-                <i className="icon-target text-sm" style={{ color: 'var(--muted)' }}></i>
-                <input type="text" defaultValue={t.condition} className="flex-1 text-sm input-clean" onChange={(e) => updateTrigger(t.id, e.target.value)} />
-                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded" style={{ background: t.status === 'warning' ? 'var(--warn-soft)' : 'var(--bg-warm)', color: t.status === 'warning' ? 'var(--warn)' : 'var(--ink-soft)' }}>{t.status === 'warning' ? 'WARNING' : 'CLEAR'}</span>
-                <button onClick={() => removeTrigger(t.id)} className="toolbar-btn"><i className="icon-x text-xs"></i></button>
-              </div>
-            ))}
-          </div>
+
+          {!security ? (
+            <div className="p-4 border border-dashed rounded-md text-center text-xs" style={{ borderColor: 'var(--border)', background: 'var(--bg-warm)', color: 'var(--muted)' }}>Select a security to tie triggers to its financials.</div>
+          ) : stmtLoading && !statements ? (
+            <div className="p-4 border border-dashed rounded-md text-center text-xs" style={{ borderColor: 'var(--border)', background: 'var(--bg-warm)', color: 'var(--muted)' }}>Loading financial line items…</div>
+          ) : !statements ? (
+            <div className="p-4 border border-dashed rounded-md text-center text-xs" style={{ borderColor: 'var(--border)', background: 'var(--bg-warm)', color: 'var(--muted)' }}>Financial statements are unavailable for this security, so triggers can&rsquo;t be tracked.</div>
+          ) : (
+            <div className="space-y-3">
+              {triggers.length === 0 && (
+                <div className="p-4 border border-dashed rounded-md text-center text-xs" style={{ borderColor: 'var(--border)', background: 'var(--bg-warm)', color: 'var(--muted)' }}>No triggers yet. Add one to track a revenue, margin, cash, or other line item against your threshold.</div>
+              )}
+              {triggers.map(t => {
+                const cur = t.currency || statements.currency
+                const complete = Boolean(t.metric) && validComparisons(t).length > 0
+                const latest = t.metric ? latestMetric(statements, t.statement, t.period || 'annual', t.metric, t.scale) : null
+                const evalRes = complete ? evaluateTrigger({ ...t, s: 'clear' }, statements) : null
+                const stStyle = evalRes ? TRIGGER_STATUS_STYLE[evalRes.status] : null
+                return (
+                  <div key={t.id}>
+                    <TriggerComposer
+                      trigger={t}
+                      statements={statements}
+                      onChange={(structured) => updateTriggerFromComposer(t.id, structured)}
+                      onRemove={() => removeTrigger(t.id)}
+                    />
+                    {/* Live standing against the latest filing, once a metric is chosen */}
+                    {t.metric && (
+                      <div className="flex items-center gap-2.5 text-[11px] px-2.5 pt-1.5">
+                        <span style={{ color: 'var(--muted)' }}>Latest <span className="font-mono" style={{ color: 'var(--ink-soft)' }}>{latest ? formatMetricValue(latest.value, latest.kind, cur, t.scale) : '—'}</span>{latest?.period && <span className="font-mono" style={{ color: 'var(--faint)' }}> · {latest.period}</span>}</span>
+                        {stStyle && <span className="text-[10px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded" style={{ background: stStyle.soft, color: stStyle.color }}>{stStyle.label}</span>}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          )}
         </div>
 
         <div className="border-b mb-6 flex items-center gap-1" style={{ borderColor: 'var(--border)' }}>

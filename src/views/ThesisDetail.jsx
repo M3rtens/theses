@@ -4,6 +4,7 @@ import SpreadsheetViewer from '../components/SpreadsheetViewer.jsx'
 import { sampleTheses } from '../data/theses.js'
 import { fmtPrice } from '../lib/format.js'
 import { modelHasContent } from '../lib/model.js'
+import { evaluateTrigger, latestMetric, formatMetricValue } from '../lib/triggers.js'
 
 // Trigger status → label + CSS class used in the monitor cards.
 const TRIGGER_META = {
@@ -54,6 +55,22 @@ export default function ThesisDetail({ navigate, thesis }) {
   }, [symbol, entryDate])
 
   const d = data || {}
+
+  // Full financial statements for the security, used to evaluate structured
+  // triggers live against the latest filings. Only fetched when a trigger is
+  // actually tied to a metric (samples use static statuses).
+  const hasFinancialTriggers = (base.triggers || []).some((t) => t?.metric)
+  const [statements, setStatements] = useState(null)
+  useEffect(() => {
+    if (!hasFinancialTriggers) { setStatements(null); return }
+    let cancelled = false
+    setStatements(null)
+    fetch(`/api/financials?symbol=${encodeURIComponent(symbol)}`)
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
+      .then((res) => { if (!cancelled && res && !res.error) setStatements(res) })
+      .catch(() => { /* keep stored statuses */ })
+    return () => { cancelled = true }
+  }, [symbol, hasFinancialTriggers])
 
   // Chart timeframe. For non-'pub' ranges we fetch a wider history separately so
   // the stats above stay anchored at publication.
@@ -536,15 +553,26 @@ export default function ThesisDetail({ navigate, thesis }) {
                   <p className="text-xs" style={{ color: 'var(--muted)' }}>No triggers defined.</p>
                 )}
                 {(base.triggers || []).map((trig, i) => {
-                  const meta = TRIGGER_META[trig.s] || TRIGGER_META.clear
-                  const warn = trig.s === 'warning' || trig.s === 'breached'
+                  // Re-evaluate financial triggers against the latest filings; fall
+                  // back to the stored status for legacy/sample text triggers.
+                  const tracked = Boolean(trig.metric) && Boolean(statements)
+                  const evalRes = tracked ? evaluateTrigger(trig, statements) : null
+                  const status = evalRes ? evalRes.status : trig.s
+                  const meta = TRIGGER_META[status] || TRIGGER_META.clear
+                  const warn = status === 'warning' || status === 'breached'
+                  const latest = tracked ? latestMetric(statements, trig.statement, trig.period, trig.metric, trig.scale) : null
                   return (
-                    <div key={i} className={warn ? 'p-3 border-2 rounded' : 'p-3 border rounded'} style={warn ? { borderColor: trig.s === 'breached' ? 'var(--bear)' : 'var(--warn)', background: trig.s === 'breached' ? 'var(--bear-soft)' : 'var(--warn-soft)' } : { borderColor: 'var(--border)', background: 'white' }}>
+                    <div key={i} className={warn ? 'p-3 border-2 rounded' : 'p-3 border rounded'} style={warn ? { borderColor: status === 'breached' ? 'var(--bear)' : 'var(--warn)', background: status === 'breached' ? 'var(--bear-soft)' : 'var(--warn-soft)' } : { borderColor: 'var(--border)', background: 'white' }}>
                       <div className="flex items-start justify-between gap-2 mb-1">
                         <span className={`text-[10px] font-mono uppercase tracking-wider ${meta.cls}`}>{meta.label}</span>
-                        <span className="text-[10px] font-mono" style={{ color: 'var(--muted)' }}>Monitored live</span>
+                        <span className="text-[10px] font-mono" style={{ color: 'var(--muted)' }}>{trig.metric ? (statements ? 'Tracked live' : 'Loading…') : 'Monitored live'}</span>
                       </div>
                       <p className="text-xs leading-snug">{trig.c}</p>
+                      {latest && (
+                        <p className="text-[10px] font-mono mt-1" style={{ color: 'var(--muted)' }}>
+                          Latest: {formatMetricValue(latest.value, latest.kind, trig.currency || statements.currency, trig.scale)}{latest.period ? ` · ${latest.period}` : ''}
+                        </p>
+                      )}
                     </div>
                   )
                 })}
