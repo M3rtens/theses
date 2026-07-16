@@ -22,13 +22,36 @@ export default function Dashboard({ navigate }) {
   const winRate = closed.length ? Math.round((wins / closed.length) * 100) : null
   // Rank comes from the (static) leaderboard — there is no live ranking source.
   const me = leaderboardData.find((r) => r.isYou)
+
+  // Trigger alerts, derived live from the theses themselves. useStoredTheses()
+  // loads via POST /api/theses/evaluate, which recomputes and persists each
+  // stored thesis's financial-trigger statuses against the latest filings — so a
+  // trigger that has breached (or is nearing its threshold) surfaces here without
+  // any hand-maintained list. Breached first, then warning; within each, the most
+  // recently published thesis leads so fresh triggers rise to the top.
+  const STATUS_RANK = { breached: 0, warning: 1 }
+  const alertOf = (tr, thesis) => ({ condition: tr.c, status: tr.s, thesis })
+  const alerts = active
+    .flatMap((t) => (t.triggers || [])
+      .filter((tr) => tr.s === 'breached' || tr.s === 'warning')
+      .map((tr) => alertOf(tr, t)))
+    .sort((a, b) => {
+      const byStatus = STATUS_RANK[a.status] - STATUS_RANK[b.status]
+      if (byStatus !== 0) return byStatus
+      return new Date(b.thesis.createdAt || 0) - new Date(a.thesis.createdAt || 0)
+    })
+  const VISIBLE_ALERTS = 5
+  const shownAlerts = alerts.slice(0, VISIBLE_ALERTS)
+  const alertColor = (status) => (status === 'breached' ? '--bear' : '--warn')
+  const alertLabel = (status) => (status === 'breached' ? 'BREACHED' : 'WARNING')
+
   return (
     <>
       <header className="px-12 pt-8 pb-6 flex items-end justify-between border-b" style={{ borderColor: 'var(--border)' }}>
         <div>
           <div className="text-[10px] font-mono uppercase tracking-wider mb-1" style={{ color: 'var(--muted)' }}>Thursday, March 14 · 16:32 EST</div>
           <h1 className="font-serif text-3xl font-medium tracking-tight">Good afternoon, Elena.</h1>
-          <p className="text-sm mt-1" style={{ color: 'var(--ink-soft)' }}>You have <span style={{ color: 'var(--bear)', fontWeight: 500 }}>2 trigger alerts</span> and <span style={{ fontWeight: 500 }}>1 draft</span> awaiting review.</p>
+          <p className="text-sm mt-1" style={{ color: 'var(--ink-soft)' }}>You have <span style={{ color: alerts.length ? 'var(--bear)' : 'var(--ink-soft)', fontWeight: 500 }}>{alerts.length} trigger alert{alerts.length === 1 ? '' : 's'}</span> and <span style={{ fontWeight: 500 }}>1 draft</span> awaiting review.</p>
         </div>
         <div className="flex items-center gap-3">
           <div className="seal"><i className="icon-shield-check text-[11px]"></i> Integrity: Verified</div>
@@ -84,25 +107,32 @@ export default function Dashboard({ navigate }) {
             <div>
               <div className="flex items-baseline justify-between mb-4">
                 <h2 className="font-serif text-xl font-medium">Trigger Alerts</h2>
-                <span className="text-[10px] font-mono px-1.5 py-0.5" style={{ background: 'var(--bear-soft)', color: 'var(--bear)' }}>2 ACTIVE</span>
+                {alerts.length > 0 && (
+                  <span className="text-[10px] font-mono px-1.5 py-0.5" style={{ background: 'var(--bear-soft)', color: 'var(--bear)' }}>{alerts.length} ACTIVE</span>
+                )}
               </div>
               <div className="space-y-3">
-                <div className="p-4 border" style={{ borderColor: 'var(--bear)', background: 'var(--bear-soft)' }}>
-                  <div className="flex items-start justify-between mb-1">
-                    <span className="font-mono text-xs font-semibold" style={{ color: 'var(--bear)' }}>SNAP · BEAR</span>
-                    <span className="text-[10px] font-mono" style={{ color: 'var(--bear)' }}>BREACHED</span>
+                {alerts.length === 0 && (
+                  <div className="p-4 border" style={{ borderColor: 'var(--border)', background: 'var(--bg)' }}>
+                    <p className="text-sm leading-snug" style={{ color: 'var(--ink-soft)' }}>No triggers breached or approaching threshold. All active theses are within safe parameters.</p>
                   </div>
-                  <p className="text-sm leading-snug">DAU growth fell below 2% for second consecutive quarter. Invalidation condition met.</p>
-                  <button onClick={() => navigate('thesis', allTheses.find((t) => t.ticker === 'SNAP'))} className="text-xs font-medium mt-2 underline" style={{ color: 'var(--bear)', background: 'transparent', border: 'none', cursor: 'pointer' }}>Review thesis →</button>
-                </div>
-                <div className="p-4 border" style={{ borderColor: 'var(--warn)', background: 'var(--warn-soft)' }}>
-                  <div className="flex items-start justify-between mb-1">
-                    <span className="font-mono text-xs font-semibold" style={{ color: 'var(--warn)' }}>ASML · BULL</span>
-                    <span className="text-[10px] font-mono" style={{ color: 'var(--warn)' }}>WARNING</span>
-                  </div>
-                  <p className="text-sm leading-snug">China revenue approaching 25% threshold. Currently at 21%.</p>
-                  <button onClick={() => navigate('thesis', allTheses.find((t) => t.ticker === 'ASML'))} className="text-xs font-medium mt-2 underline" style={{ color: 'var(--warn)', background: 'transparent', border: 'none', cursor: 'pointer' }}>Review thesis →</button>
-                </div>
+                )}
+                {shownAlerts.map((a, i) => {
+                  const color = alertColor(a.status)
+                  return (
+                    <div key={`${a.thesis.ticker}-${i}`} className="p-4 border" style={{ borderColor: `var(${color})`, background: `var(${color}-soft)` }}>
+                      <div className="flex items-start justify-between mb-1">
+                        <span className="font-mono text-xs font-semibold" style={{ color: `var(${color})` }}>{a.thesis.ticker} · {(a.thesis.side || '').toUpperCase()}</span>
+                        <span className="text-[10px] font-mono" style={{ color: `var(${color})` }}>{alertLabel(a.status)}</span>
+                      </div>
+                      <p className="text-sm leading-snug">{a.condition}</p>
+                      <button onClick={() => navigate('thesis', a.thesis)} className="text-xs font-medium mt-2 underline" style={{ color: `var(${color})`, background: 'transparent', border: 'none', cursor: 'pointer' }}>Review thesis →</button>
+                    </div>
+                  )
+                })}
+                {alerts.length > shownAlerts.length && (
+                  <button onClick={() => navigate('triggers')} className="text-xs font-mono uppercase tracking-wider" style={{ color: 'var(--muted)', background: 'transparent', border: 'none', cursor: 'pointer' }}>+{alerts.length - shownAlerts.length} more →</button>
+                )}
               </div>
             </div>
 
