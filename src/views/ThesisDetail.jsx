@@ -192,6 +192,8 @@ export default function ThesisDetail({ navigate, thesis }) {
   // Close-date scheduling + close-now, both hitting PATCH /api/theses/:id.
   const [closeDatePickerOpen, setCloseDatePickerOpen] = useState(false)
   const [closeDateDraft, setCloseDateDraft] = useState('')
+  const [closeModalOpen, setCloseModalOpen] = useState(false)
+  const [closeAck, setCloseAck] = useState(false)
   const [lifecycleBusy, setLifecycleBusy] = useState(false)
   const [lifecycleError, setLifecycleError] = useState('')
 
@@ -230,16 +232,23 @@ export default function ThesisDetail({ navigate, thesis }) {
     }
   }
 
-  const closeNow = async () => {
+  const openCloseModal = () => {
     if (!owned || isClosed || lifecycleBusy) return
-    if (!window.confirm('Close this thesis now? The final price and return will be sealed from the live feed and cannot be reopened.')) return
+    setLifecycleError('')
+    setCloseAck(false)
+    setCloseDatePickerOpen(false)
+    setCloseModalOpen(true)
+  }
+
+  const confirmClose = async () => {
+    if (lifecycleBusy) return
     setLifecycleBusy(true)
     setLifecycleError('')
     try {
       const saved = await patchLifecycle({ action: 'close' })
       setStatus('closed')
       setClosedInfo({ closePrice: saved.closePrice, closeReturn: saved.closeReturn, closedAt: saved.closedAt })
-      setCloseDatePickerOpen(false)
+      setCloseModalOpen(false)
     } catch (e) {
       setLifecycleError(e.message)
     } finally {
@@ -420,7 +429,7 @@ export default function ThesisDetail({ navigate, thesis }) {
                   const closeActive = owned && !isClosed
                   return (
                     <button
-                      onClick={closeNow}
+                      onClick={openCloseModal}
                       disabled={!closeActive || lifecycleBusy}
                       className={`w-full text-left p-3 border rounded text-xs ${closeActive && !lifecycleBusy ? 'hover:bg-gray-50' : 'opacity-50 cursor-not-allowed'}`}
                       style={{ borderColor: 'var(--border)', background: 'transparent', cursor: closeActive && !lifecycleBusy ? 'pointer' : 'not-allowed' }}
@@ -606,6 +615,51 @@ export default function ThesisDetail({ navigate, thesis }) {
           </div>
         </div>
       </div>
+
+      {closeModalOpen && (
+        <div className="fixed inset-0 z-50 modal-backdrop flex items-center justify-center p-8">
+          <div className="bg-white border rounded-lg max-w-lg w-full" style={{ borderColor: 'var(--border-strong)', boxShadow: '0 24px 60px rgba(0,0,0,0.15)' }}>
+            <div className="p-6 border-b" style={{ borderColor: 'var(--border)' }}>
+              <div className="flex items-center gap-2 mb-2">
+                <i className="icon-lock text-base"></i>
+                <span className="text-[10px] font-mono uppercase tracking-wider font-semibold">Close &amp; Seal</span>
+              </div>
+              <h3 className="font-serif text-2xl font-medium">Close this thesis now?</h3>
+              <p className="text-sm mt-1" style={{ color: 'var(--ink-soft)' }}>This is a one-way action. The final performance is sealed from the live feed and the thesis cannot be reopened.</p>
+            </div>
+            <div className="p-6 space-y-4 text-sm">
+              <div className="p-4 border rounded-md" style={{ borderColor: 'var(--border)', background: 'var(--bg-warm)' }}>
+                <div className="text-[10px] font-mono uppercase tracking-wider mb-3" style={{ color: 'var(--muted)' }}>What gets sealed · {base.ticker}</div>
+                <div className="space-y-2">
+                  <div className="flex justify-between"><span style={{ color: 'var(--ink-soft)' }}>Entry (locked)</span><span className="font-mono">{fmtPrice(entry, currency)}</span></div>
+                  <div className="flex justify-between"><span style={{ color: 'var(--ink-soft)' }}>Closing price (live)</span><span className="font-mono font-semibold">{fmtPrice(current, currency)}</span></div>
+                  <div className="flex justify-between border-t pt-2 mt-2" style={{ borderColor: 'var(--border)' }}><span style={{ color: 'var(--ink-soft)' }}>Final return</span><span className={`font-mono font-semibold ${retClass}`}>{retSign}{Math.abs(ret).toFixed(1)}%</span></div>
+                </div>
+                <p className="text-[10px] font-mono mt-3" style={{ color: 'var(--faint)' }}>Sealed at the exchange price the moment you confirm — the figures above may move slightly.</p>
+              </div>
+              <div className="flex items-start gap-3">
+                <i className="icon-x text-base mt-0.5" style={{ color: 'var(--bear)' }}></i>
+                <div>
+                  <div className="font-medium">Cannot be reopened</div>
+                  <div className="text-xs mt-0.5" style={{ color: 'var(--muted)' }}>Live tracking stops and the return is frozen on your permanent record.</div>
+                </div>
+              </div>
+              {lifecycleError && <p className="text-xs ret-neg">{lifecycleError}</p>}
+            </div>
+            <div className="p-6 border-t flex items-center justify-between" style={{ borderColor: 'var(--border)', background: 'var(--bg-warm)' }}>
+              <button onClick={() => { if (!lifecycleBusy) { setCloseModalOpen(false); setLifecycleError('') } }} className="text-sm font-medium" style={{ color: 'var(--ink-soft)', background: 'transparent', border: 'none', cursor: lifecycleBusy ? 'not-allowed' : 'pointer' }}>Cancel</button>
+              <div className="flex items-center gap-2">
+                <label className="flex items-center gap-2 text-xs" style={{ color: 'var(--ink-soft)' }}>
+                  <input type="checkbox" checked={closeAck} onChange={(e) => setCloseAck(e.target.checked)} /> I understand this is irreversible
+                </label>
+                <button disabled={!closeAck || lifecycleBusy} onClick={confirmClose} className="btn-primary text-sm px-5 py-2 rounded-md flex items-center gap-2" style={{ opacity: (!closeAck || lifecycleBusy) ? 0.5 : 1, cursor: (!closeAck || lifecycleBusy) ? 'not-allowed' : 'pointer' }}>
+                  <i className="icon-check text-xs"></i> {lifecycleBusy ? 'Sealing…' : 'Close & Seal'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   )
 }
