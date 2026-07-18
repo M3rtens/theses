@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import ThesisCard from '../components/ThesisCard.jsx'
+import DeleteAccountModal from '../components/DeleteAccountModal.jsx'
 import { useUser } from '../components/UserProvider.jsx'
 import { leaderboardData } from '../data/theses.js'
 import { loadProfile, saveProfile } from '../lib/profile.js'
 import { makeRetOf, rankedLeaderboard } from '../lib/stats.js'
+import { createClient } from '../lib/supabase/client'
 import { withIdentity } from '../lib/user.js'
 import { useLiveTheses } from '../lib/useLiveTheses.js'
 import { useStoredTheses } from '../lib/useStoredTheses.js'
@@ -16,6 +19,7 @@ const THESIS_FILTERS = [
 
 export default function Profile({ navigate }) {
   const user = useUser()
+  const router = useRouter()
   const published = useStoredTheses()
   const live = useLiveTheses(published)
 
@@ -29,15 +33,57 @@ export default function Profile({ navigate }) {
   const signed = (n) => `${n >= 0 ? '+' : '−'}${Math.abs(n).toFixed(1)}%`
   const retClass = (n) => (n >= 0 ? 'ret-pos' : 'ret-neg')
 
-  // Editable description, persisted to localStorage. `editing` holds the draft
-  // text while the inline editor is open (null when closed).
+  // Inline profile editor. `editing` holds the {name, bio} draft while open
+  // (null when closed). Bio persists to localStorage; name is written to the
+  // Supabase auth account so it flows back through the identity context.
   const [bio, setBio] = useState('')
   const [editing, setEditing] = useState(null)
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState('')
   useEffect(() => { setBio(loadProfile().bio) }, [])
-  const saveBio = () => {
-    const next = saveProfile({ bio: editing.trim() }).bio
-    setBio(next)
-    setEditing(null)
+
+  const openEditor = () => { setSaveError(''); setEditing({ name: me?.name || '', bio }) }
+
+  const saveEdits = async () => {
+    setSaving(true)
+    setSaveError('')
+    try {
+      // Persist the bio locally.
+      setBio(saveProfile({ bio: editing.bio.trim() }).bio)
+      // Persist a changed name to the auth account, then refresh so the
+      // identity context re-derives from the updated metadata.
+      const newName = editing.name.trim()
+      if (newName && newName !== me?.name) {
+        const { error } = await createClient().auth.updateUser({ data: { full_name: newName } })
+        if (error) throw error
+        router.refresh()
+      }
+      setEditing(null)
+    } catch (e) {
+      setSaveError(e.message || 'Could not save changes.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  // Account deletion (irreversible) — confirmed via DeleteAccountModal.
+  const [deleteOpen, setDeleteOpen] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState('')
+  const deleteAccount = async () => {
+    setDeleting(true)
+    setDeleteError('')
+    try {
+      const res = await fetch('/api/account', { method: 'DELETE' })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.error || `HTTP ${res.status}`)
+      }
+      router.refresh() // session cleared server-side → lands on login
+    } catch (e) {
+      setDeleteError(e.message || 'Could not delete account.')
+      setDeleting(false)
+    }
   }
 
   // Published-theses list filter (All / Active / Closed).
@@ -81,20 +127,30 @@ export default function Profile({ navigate }) {
             {editing === null ? (
               <p className="text-sm mt-2 max-w-xl" style={{ color: 'var(--ink-soft)' }}>{bio}</p>
             ) : (
-              <div className="mt-2 max-w-xl">
+              <div className="mt-3 max-w-xl">
+                <label className="block text-[10px] font-mono uppercase tracking-wider mb-1" style={{ color: 'var(--muted)' }}>Display name</label>
+                <input
+                  type="text"
+                  value={editing.name}
+                  onChange={(e) => setEditing({ ...editing, name: e.target.value })}
+                  autoFocus
+                  className="w-full text-sm p-2 border rounded mb-3"
+                  style={{ borderColor: 'var(--border)', background: 'white', color: 'var(--ink)' }}
+                />
+                <label className="block text-[10px] font-mono uppercase tracking-wider mb-1" style={{ color: 'var(--muted)' }}>Bio</label>
                 <textarea
-                  value={editing}
-                  onChange={(e) => setEditing(e.target.value)}
+                  value={editing.bio}
+                  onChange={(e) => setEditing({ ...editing, bio: e.target.value })}
                   rows={3}
                   maxLength={280}
-                  autoFocus
                   className="w-full text-sm p-2 border rounded"
                   style={{ borderColor: 'var(--border)', background: 'white', color: 'var(--ink)', resize: 'vertical' }}
                 />
+                {saveError && <p className="text-[12px] mt-1" style={{ color: 'var(--bear)' }}>{saveError}</p>}
                 <div className="flex items-center gap-2 mt-2">
-                  <button type="button" onClick={saveBio} className="btn-primary text-xs px-3 py-1.5 rounded">Save</button>
-                  <button type="button" onClick={() => setEditing(null)} className="text-xs px-3 py-1.5 rounded border" style={{ borderColor: 'var(--border)', background: 'transparent', cursor: 'pointer' }}>Cancel</button>
-                  <span className="text-[10px] font-mono ml-auto" style={{ color: 'var(--muted)' }}>{editing.length}/280</span>
+                  <button type="button" onClick={saveEdits} disabled={saving} className="btn-primary text-xs px-3 py-1.5 rounded">{saving ? 'Saving…' : 'Save'}</button>
+                  <button type="button" onClick={() => setEditing(null)} disabled={saving} className="text-xs px-3 py-1.5 rounded border" style={{ borderColor: 'var(--border)', background: 'transparent', cursor: 'pointer' }}>Cancel</button>
+                  <span className="text-[10px] font-mono ml-auto" style={{ color: 'var(--muted)' }}>{editing.bio.length}/280</span>
                 </div>
               </div>
             )}
@@ -104,14 +160,24 @@ export default function Profile({ navigate }) {
             <div className="font-serif text-4xl font-medium">{me ? `#${myRank}` : '—'}</div>
             <div className="text-xs font-mono" style={{ color: 'var(--ink-soft)' }}>of {board.length} analysts</div>
             {editing === null && (
-              <button
-                type="button"
-                onClick={() => setEditing(bio)}
-                className="text-xs px-3 py-1.5 rounded border mt-3 inline-flex items-center gap-1.5"
-                style={{ borderColor: 'var(--border)', background: 'transparent', color: 'var(--ink)', cursor: 'pointer' }}
-              >
-                <i className="icon-pencil text-[11px]"></i> Edit Profile
-              </button>
+              <div className="mt-3 flex flex-col items-end gap-2">
+                <button
+                  type="button"
+                  onClick={openEditor}
+                  className="text-xs px-3 py-1.5 rounded border inline-flex items-center gap-1.5"
+                  style={{ borderColor: 'var(--border)', background: 'transparent', color: 'var(--ink)', cursor: 'pointer' }}
+                >
+                  <i className="icon-pencil text-[11px]"></i> Edit Profile
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setDeleteError(''); setDeleteOpen(true) }}
+                  className="text-xs px-3 py-1.5 rounded border inline-flex items-center gap-1.5"
+                  style={{ borderColor: 'var(--border)', background: 'transparent', color: 'var(--bear)', cursor: 'pointer' }}
+                >
+                  <i className="icon-trash-2 text-[11px]"></i> Delete Profile
+                </button>
+              </div>
             )}
           </div>
         </div>
@@ -197,6 +263,14 @@ export default function Profile({ navigate }) {
           </div>
         </div>
       </div>
+
+      <DeleteAccountModal
+        open={deleteOpen}
+        deleting={deleting}
+        error={deleteError}
+        onClose={() => setDeleteOpen(false)}
+        onConfirm={deleteAccount}
+      />
     </>
   )
 }
