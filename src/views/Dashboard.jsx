@@ -1,6 +1,6 @@
 import ThesisCard from '../components/ThesisCard.jsx'
 import { useUser } from '../components/UserProvider.jsx'
-import { leaderboardData } from '../data/theses.js'
+import { useLeaderboard } from '../lib/useLeaderboard.js'
 import { relativeTime } from '../lib/drafts.js'
 import { useLiveTheses } from '../lib/useLiveTheses.js'
 import { useStoredTheses } from '../lib/useStoredTheses.js'
@@ -23,8 +23,9 @@ export default function Dashboard({ navigate }) {
   const closed = allTheses.filter((t) => t.status === 'closed')
   const wins = closed.filter((t) => retOf(t) > 0).length
   const winRate = closed.length ? Math.round((wins / closed.length) * 100) : null
-  // Rank comes from the (static) leaderboard — there is no live ranking source.
-  const me = leaderboardData.find((r) => r.isYou)
+  // Rank comes from the database-computed leaderboard.
+  const board = useLeaderboard()
+  const me = board.find((r) => r.isYou)
 
   // Trigger alerts, derived live from the theses themselves. useStoredTheses()
   // loads via POST /api/theses/evaluate, which recomputes and persists each
@@ -100,7 +101,7 @@ export default function Dashboard({ navigate }) {
             <div className="text-[10px] font-mono uppercase tracking-wider mb-2" style={{ color: 'var(--muted)' }}>Leaderboard Rank</div>
             <div className="flex items-baseline gap-2">
               <span className="font-serif text-4xl font-medium">{me ? `#${me.rank}` : '—'}</span>
-              <span className="text-xs num-mono" style={{ color: 'var(--ink-soft)' }}>of {leaderboardData.length}</span>
+              <span className="text-xs num-mono" style={{ color: 'var(--ink-soft)' }}>of {board.length}</span>
             </div>
           </div>
         </div>

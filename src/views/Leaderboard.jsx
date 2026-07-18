@@ -1,10 +1,5 @@
-import { useMemo, useState } from 'react'
-import { useUser } from '../components/UserProvider.jsx'
-import { leaderboardData } from '../data/theses.js'
-import { rankedLeaderboard } from '../lib/stats.js'
-import { withIdentity } from '../lib/user.js'
-import { useLiveTheses } from '../lib/useLiveTheses.js'
-import { useStoredTheses } from '../lib/useStoredTheses.js'
+import { useState } from 'react'
+import { useLeaderboard } from '../lib/useLeaderboard.js'
 
 const SIDE_FILTERS = [
   { value: 'all', label: 'All' },
@@ -32,15 +27,8 @@ export default function Leaderboard({ navigate }) {
   const [periodFilter, setPeriodFilter] = useState('all')
   const [sectorFilter, setSectorFilter] = useState('All Sectors')
 
-  // The user's own row is computed from their real theses and the board re-ranked
-  // by average return; the seeded analysts are unchanged.
-  const user = useUser()
-  const published = useStoredTheses()
-  const live = useLiveTheses(published)
-  const board = useMemo(
-    () => rankedLeaderboard(leaderboardData, published, live).map((r) => (r.isYou ? withIdentity(r, user) : r)),
-    [published, live, user],
-  )
+  // Ranked analysts computed from the database (all users' stored theses).
+  const board = useLeaderboard()
 
   const filteredData = board.filter((analyst) => {
     const side = analyst.best.includes('Short') ? 'bear' : 'bull'
@@ -86,7 +74,7 @@ export default function Leaderboard({ navigate }) {
               <button key={sector} type="button" aria-pressed={sectorFilter === sector} onClick={() => setSectorFilter(sector)} className={filterClass(sectorFilter === sector)}>{sector}</button>
             ))}
           </div>
-          <div className="ml-auto text-xs font-mono" style={{ color: 'var(--muted)' }}>{filteredData.length} displayed · 2,841 analysts · Updated 16:32 EST</div>
+          <div className="ml-auto text-xs font-mono" style={{ color: 'var(--muted)' }}>{filteredData.length} displayed · {board.length} analyst{board.length === 1 ? '' : 's'}</div>
         </div>
       </header>
 

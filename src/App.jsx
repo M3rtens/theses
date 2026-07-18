@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useUser } from './components/UserProvider.jsx'
 import { deleteDraft } from './lib/drafts.js'
+import { createClient } from './lib/supabase/client'
 import Sidebar from './components/Sidebar.jsx'
 import Toast from './components/Toast.jsx'
 import PublishModal from './components/PublishModal.jsx'
@@ -57,6 +58,23 @@ export default function App() {
   useEffect(() => {
     document.body.classList.toggle('modal-open', publishOpen)
   }, [publishOpen])
+
+  // Keep the user's public profile row in step with their current identity, so
+  // the leaderboard and public pages show the right name/avatar (and pick up
+  // name changes). Owner-only write, enforced by RLS.
+  useEffect(() => {
+    if (!user?.id) return
+    createClient()
+      .from('profiles')
+      .upsert({
+        id: user.id,
+        name: user.name,
+        handle: user.handle,
+        avatar: user.avatar,
+        updated_at: new Date().toISOString(),
+      })
+      .then(() => {}, () => { /* profiles table not ready / offline */ })
+  }, [user?.id, user?.name, user?.handle, user?.avatar])
 
   const openPublish = useCallback((draft) => {
     setPendingDraft(draft)

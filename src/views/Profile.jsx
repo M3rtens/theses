@@ -3,11 +3,10 @@ import { useRouter } from 'next/navigation'
 import ThesisCard from '../components/ThesisCard.jsx'
 import DeleteAccountModal from '../components/DeleteAccountModal.jsx'
 import { useUser } from '../components/UserProvider.jsx'
-import { leaderboardData } from '../data/theses.js'
 import { loadProfile, saveProfile } from '../lib/profile.js'
-import { makeRetOf, rankedLeaderboard } from '../lib/stats.js'
+import { makeRetOf, selfStats } from '../lib/stats.js'
 import { createClient } from '../lib/supabase/client'
-import { withIdentity } from '../lib/user.js'
+import { useLeaderboard } from '../lib/useLeaderboard.js'
 import { useLiveTheses } from '../lib/useLiveTheses.js'
 import { useStoredTheses } from '../lib/useStoredTheses.js'
 
@@ -23,13 +22,13 @@ export default function Profile({ navigate }) {
   const published = useStoredTheses()
   const live = useLiveTheses(published)
 
-  // The profile mirrors this analyst's row on the leaderboard — computed from
-  // their real theses and re-ranked by return — so both surfaces agree. The
-  // signed-in user's identity is overlaid onto their row.
-  const board = useMemo(() => rankedLeaderboard(leaderboardData, published, live), [published, live])
-  const meIdx = board.findIndex((r) => r.isYou)
-  const me = meIdx >= 0 ? withIdentity(board[meIdx], user) : null
-  const myRank = meIdx + 1
+  // Own stat tiles are computed live from this user's theses; rank and the total
+  // analyst count come from the database-wide leaderboard.
+  const board = useLeaderboard()
+  const stats = useMemo(() => selfStats(published, makeRetOf(live)), [published, live])
+  const myRow = board.find((r) => r.isYou)
+  const myRank = myRow?.rank ?? null
+  const me = { ...stats, name: user?.name || 'You', handle: user?.handle || '', avatar: user?.avatar || '—' }
   const signed = (n) => `${n >= 0 ? '+' : '−'}${Math.abs(n).toFixed(1)}%`
   const retClass = (n) => (n >= 0 ? 'ret-pos' : 'ret-neg')
 
@@ -157,8 +156,8 @@ export default function Profile({ navigate }) {
           </div>
           <div className="text-right shrink-0">
             <div className="text-[10px] font-mono uppercase tracking-wider" style={{ color: 'var(--muted)' }}>Global Rank</div>
-            <div className="font-serif text-4xl font-medium">{me ? `#${myRank}` : '—'}</div>
-            <div className="text-xs font-mono" style={{ color: 'var(--ink-soft)' }}>of {board.length} analysts</div>
+            <div className="font-serif text-4xl font-medium">{myRank ? `#${myRank}` : '—'}</div>
+            <div className="text-xs font-mono" style={{ color: 'var(--ink-soft)' }}>of {board.length} analyst{board.length === 1 ? '' : 's'}</div>
             {editing === null && (
               <div className="mt-3 flex flex-col items-end gap-2">
                 <button
