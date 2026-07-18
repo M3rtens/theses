@@ -1,13 +1,16 @@
 import { useMemo, useState } from 'react'
 import { sampleDiscover } from '../data/theses.js'
+import { SECTORS } from '../lib/sectors.js'
 
 export default function Discover({ navigate }) {
-  // Title search and security-type (sector) filter over the community feed.
+  // Title search and sector filter over the community feed.
   const [query, setQuery] = useState('')
   const [sector, setSector] = useState('all')
 
+  // Offer the full canonical sector list, plus any sector present in the feed
+  // that isn't already in it, so nothing is unfilterable.
   const sectors = useMemo(
-    () => [...new Set(sampleDiscover.map((t) => t.sector).filter(Boolean))].sort(),
+    () => [...new Set([...SECTORS, ...sampleDiscover.map((t) => t.sector).filter(Boolean)])].sort(),
     [],
   )
 

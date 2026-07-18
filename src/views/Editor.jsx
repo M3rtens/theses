@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import SecuritySearch from '../components/SecuritySearch.jsx'
 import { useUser } from '../components/UserProvider.jsx'
+import { SECTORS } from '../lib/sectors.js'
 import { fmtPrice, currencySymbol } from '../lib/format.js'
 import { saveDraft as persistDraft } from '../lib/drafts.js'
 import SpreadsheetEditor from '../components/SpreadsheetEditor.jsx'
@@ -507,12 +508,9 @@ export default function Editor({ draft = null, navigate, showToast, onOpenPublis
             <span className="text-[10px] font-mono uppercase tracking-wider" style={{ color: 'var(--muted)' }}>Sector</span>
             <select ref={sectorRef} className="text-sm px-2 py-1 input-bordered rounded" defaultValue={draft?.sector || ''}>
               <option value="">Select sector</option>
-              <option>Semiconductors</option>
-              <option>Software</option>
-              <option>Energy</option>
-              <option>Financials</option>
-              <option>Healthcare</option>
-              <option>Consumer</option>
+              {SECTORS.map((s) => (
+                <option key={s} value={s}>{s}</option>
+              ))}
             </select>
           </div>
         </div>
