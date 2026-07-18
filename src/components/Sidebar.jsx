@@ -37,9 +37,9 @@ export default function Sidebar({ view, navigate }) {
       .then((r) => (r.ok ? r.json() : []))
       .then((rows) => { if (!cancelled && Array.isArray(rows)) setStored(rows) })
       .catch(() => { /* store unavailable */ })
-    setDraftCount(loadDrafts().length)
+    setDraftCount(loadDrafts(user?.id).length)
     return () => { cancelled = true }
-  }, [view])
+  }, [view, user?.id])
 
   const allTheses = useMemo(() => stored, [stored])
   const counts = { mytheses: allTheses.length, drafts: draftCount }

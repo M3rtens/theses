@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import SecuritySearch from '../components/SecuritySearch.jsx'
+import { useUser } from '../components/UserProvider.jsx'
 import { fmtPrice, currencySymbol } from '../lib/format.js'
 import { saveDraft as persistDraft } from '../lib/drafts.js'
 import SpreadsheetEditor from '../components/SpreadsheetEditor.jsx'
@@ -60,6 +61,7 @@ const formatPublicationDate = (value) => dateFromValue(value).toLocaleDateString
 const WEEKDAYS = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su']
 
 export default function Editor({ draft = null, navigate, showToast, onOpenPublish }) {
+  const user = useUser()
   // Rebuild the internal trigger shape from a saved draft's structured rows.
   const draftTriggers = draft?.triggers?.length
     ? draft.triggers.map((t, i) => ({
@@ -233,7 +235,9 @@ export default function Editor({ draft = null, navigate, showToast, onOpenPublis
       showToast('Finish each trigger — pick a line item and enter a threshold — or remove it before publishing.')
       return
     }
-    onOpenPublish(draft)
+    // Carry the draft id (if this thesis was saved as a draft) so it can be
+    // removed once publishing succeeds. The create API ignores this field.
+    onOpenPublish({ ...draft, draftId })
   }
 
   // Seed the contenteditable body once on mount. New theses begin blank.
@@ -427,7 +431,7 @@ export default function Editor({ draft = null, navigate, showToast, onOpenPublis
       showToast('Add a title or select a security before saving.')
       return
     }
-    const saved = persistDraft(built, draftId)
+    const saved = persistDraft(built, draftId, user?.id)
     if (!saved) {
       showToast('Could not save draft — local storage is unavailable.')
       return

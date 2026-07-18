@@ -1,6 +1,8 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useUser } from './components/UserProvider.jsx'
+import { deleteDraft } from './lib/drafts.js'
 import Sidebar from './components/Sidebar.jsx'
 import Toast from './components/Toast.jsx'
 import PublishModal from './components/PublishModal.jsx'
@@ -16,6 +18,7 @@ import Discover from './views/Discover.jsx'
 import { fmtPrice } from './lib/format.js'
 
 export default function App() {
+  const user = useUser()
   const [view, setView] = useState('dashboard')
   const [editorDraft, setEditorDraft] = useState(null)
   const [activeThesis, setActiveThesis] = useState(null)
@@ -72,6 +75,9 @@ export default function App() {
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`)
+      // Published successfully — remove the originating draft, if any, so it no
+      // longer shows in Drafts.
+      if (pendingDraft.draftId) deleteDraft(pendingDraft.draftId, user?.id)
       setPublishOpen(false)
       setPendingDraft(null)
       showToast(`Thesis published. Entry locked at ${fmtPrice(data.entry, data.currency)} · Timestamp sealed.`)

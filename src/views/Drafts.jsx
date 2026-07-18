@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react'
 import { deleteDraft, loadDrafts, relativeTime } from '../lib/drafts.js'
+import { useUser } from '../components/UserProvider.jsx'
 import ConfirmModal from '../components/ConfirmModal.jsx'
 
 export default function Drafts({ navigate }) {
+  const user = useUser()
   // Saved drafts (localStorage) held in state so deleting one re-renders.
   const [saved, setSaved] = useState([])
-  useEffect(() => { setSaved(loadDrafts()) }, [])
+  useEffect(() => { setSaved(loadDrafts(user?.id)) }, [user?.id])
 
   // The draft awaiting delete confirmation (null when the dialog is closed).
   const [pendingDelete, setPendingDelete] = useState(null)
@@ -20,7 +22,7 @@ export default function Drafts({ navigate }) {
   }
 
   const confirmDelete = () => {
-    if (pendingDelete) setSaved(deleteDraft(pendingDelete.id))
+    if (pendingDelete) setSaved(deleteDraft(pendingDelete.id, user?.id))
     setPendingDelete(null)
   }
 
