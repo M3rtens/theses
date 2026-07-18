@@ -1,10 +1,12 @@
 import ThesisCard from '../components/ThesisCard.jsx'
+import { useUser } from '../components/UserProvider.jsx'
 import { leaderboardData } from '../data/theses.js'
 import { relativeTime } from '../lib/drafts.js'
 import { useLiveTheses } from '../lib/useLiveTheses.js'
 import { useStoredTheses } from '../lib/useStoredTheses.js'
 
 export default function Dashboard({ navigate }) {
+  const user = useUser()
   // Published theses from the store, matching My Theses.
   const stored = useStoredTheses()
   const allTheses = stored
@@ -63,7 +65,7 @@ export default function Dashboard({ navigate }) {
     <>
       <header className="px-12 pt-8 pb-6 flex items-end justify-between border-b" style={{ borderColor: 'var(--border)' }}>
         <div>
-          <h1 className="font-serif text-3xl font-medium tracking-tight">{greeting}, Elena.</h1>
+          <h1 className="font-serif text-3xl font-medium tracking-tight">{greeting}{user?.firstName ? `, ${user.firstName}` : ''}.</h1>
           <p className="text-sm mt-1" style={{ color: 'var(--ink-soft)' }}>You have <span style={{ color: alerts.length ? 'var(--bear)' : 'var(--ink-soft)', fontWeight: 500 }}>{alerts.length} trigger alert{alerts.length === 1 ? '' : 's'}</span> and <span style={{ fontWeight: 500 }}>1 draft</span> awaiting review.</p>
         </div>
         <div className="flex items-center gap-3">

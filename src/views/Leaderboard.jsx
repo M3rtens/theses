@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react'
+import { useUser } from '../components/UserProvider.jsx'
 import { leaderboardData } from '../data/theses.js'
 import { rankedLeaderboard } from '../lib/stats.js'
+import { withIdentity } from '../lib/user.js'
 import { useLiveTheses } from '../lib/useLiveTheses.js'
 import { useStoredTheses } from '../lib/useStoredTheses.js'
 
@@ -32,9 +34,13 @@ export default function Leaderboard({ navigate }) {
 
   // The user's own row is computed from their real theses and the board re-ranked
   // by average return; the seeded analysts are unchanged.
+  const user = useUser()
   const published = useStoredTheses()
   const live = useLiveTheses(published)
-  const board = useMemo(() => rankedLeaderboard(leaderboardData, published, live), [published, live])
+  const board = useMemo(
+    () => rankedLeaderboard(leaderboardData, published, live).map((r) => (r.isYou ? withIdentity(r, user) : r)),
+    [published, live, user],
+  )
 
   const filteredData = board.filter((analyst) => {
     const side = analyst.best.includes('Short') ? 'bear' : 'bull'

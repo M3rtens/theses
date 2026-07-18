@@ -17,6 +17,10 @@ dist-ssr
 out
 next-env.d.ts
 
+# Env files (keep secrets out of git)
+.env
+.env*.local
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

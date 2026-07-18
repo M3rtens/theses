@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import ThesisCard from '../components/ThesisCard.jsx'
+import { useUser } from '../components/UserProvider.jsx'
 import { leaderboardData } from '../data/theses.js'
 import { loadProfile, saveProfile } from '../lib/profile.js'
 import { makeRetOf, rankedLeaderboard } from '../lib/stats.js'
+import { withIdentity } from '../lib/user.js'
 import { useLiveTheses } from '../lib/useLiveTheses.js'
 import { useStoredTheses } from '../lib/useStoredTheses.js'
 
@@ -13,14 +15,16 @@ const THESIS_FILTERS = [
 ]
 
 export default function Profile({ navigate }) {
+  const user = useUser()
   const published = useStoredTheses()
   const live = useLiveTheses(published)
 
   // The profile mirrors this analyst's row on the leaderboard — computed from
-  // their real theses and re-ranked by return — so both surfaces agree.
+  // their real theses and re-ranked by return — so both surfaces agree. The
+  // signed-in user's identity is overlaid onto their row.
   const board = useMemo(() => rankedLeaderboard(leaderboardData, published, live), [published, live])
   const meIdx = board.findIndex((r) => r.isYou)
-  const me = meIdx >= 0 ? board[meIdx] : null
+  const me = meIdx >= 0 ? withIdentity(board[meIdx], user) : null
   const myRank = meIdx + 1
   const signed = (n) => `${n >= 0 ? '+' : '−'}${Math.abs(n).toFixed(1)}%`
   const retClass = (n) => (n >= 0 ? 'ret-pos' : 'ret-neg')

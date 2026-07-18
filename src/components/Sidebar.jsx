@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { loadDrafts } from '../lib/drafts.js'
+import { createClient } from '../lib/supabase/client'
+import { useUser } from './UserProvider.jsx'
 
 const NAV_MAIN = [
   { view: 'dashboard', icon: 'icon-layout-dashboard', label: 'Dashboard' },
@@ -15,6 +18,13 @@ const NAV_COMMUNITY = [
 
 export default function Sidebar({ view, navigate }) {
   const navClass = (v) => `nav-item ${view === v ? 'active' : ''} cursor-pointer flex items-center gap-2.5 py-1`
+
+  const user = useUser()
+  const router = useRouter()
+  const signOut = async () => {
+    await createClient().auth.signOut()
+    router.refresh()
+  }
 
   // Published theses from the store, refreshed on every navigation so a freshly
   // published thesis is reflected without a reload. Drives both the workspace count
@@ -143,12 +153,12 @@ export default function Sidebar({ view, navigate }) {
 
       <div className="px-4 py-4 border-t" style={{ borderColor: 'var(--border)' }}>
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-full flex items-center justify-center font-mono text-xs font-semibold" style={{ background: 'var(--ink)', color: 'white' }}>EV</div>
+          <div className="w-8 h-8 rounded-full flex items-center justify-center font-mono text-xs font-semibold" style={{ background: 'var(--ink)', color: 'white' }}>{user?.avatar || '—'}</div>
           <div className="flex-1 min-w-0">
-            <div className="text-sm font-medium truncate">Elena Vance</div>
-            <div className="text-[11px] font-mono" style={{ color: 'var(--muted)' }}>@evance · 12 theses</div>
+            <div className="text-sm font-medium truncate">{user?.name || 'You'}</div>
+            <div className="text-[11px] font-mono truncate" style={{ color: 'var(--muted)' }}>{user?.handle || ''} · {allTheses.length} theses</div>
           </div>
-          <button className="toolbar-btn"><i className="icon-settings text-sm"></i></button>
+          <button className="toolbar-btn" onClick={signOut} title="Sign out"><i className="icon-log-out text-sm"></i></button>
         </div>
       </div>
     </aside>

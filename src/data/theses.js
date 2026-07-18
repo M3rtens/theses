@@ -12,7 +12,10 @@ export const leaderboardData = [
   { rank: 11, name: "Mei Lin", handle: "@mlin", avatar: "ML", theses: 22, winRate: 82, avgReturn: 12.3, annualized: 19.7, avgHold: "84d", best: "COST · Long · +38%", bestRet: 38 },
   { rank: 12, name: "Andre Sokolov", handle: "@asokolov", avatar: "AS", theses: 33, winRate: 70, avgReturn: 11.9, annualized: 18.9, avgHold: "191d", best: "UBER · Long · +64%", bestRet: 64 },
   { rank: 13, name: "Caterina Bianchi", handle: "@cbianchi", avatar: "CB", theses: 27, winRate: 76, avgReturn: 11.6, annualized: 18.4, avgHold: "72d", best: "ENPH · Short · +48%", bestRet: 48 },
-  { rank: 14, name: "Elena Vance", handle: "@evance", avatar: "EV", theses: 12, winRate: 71, avgReturn: 11.4, annualized: 19.8, avgHold: "214d", best: "NVDA · Long · +105%", bestRet: 105, isYou: true },
+  // The "you" row. Identity fields (name/handle/avatar) are overlaid from the
+  // signed-in account at render (see withIdentity); stats are replaced by the
+  // user's real figures via rankedLeaderboard. Values here are inert fallbacks.
+  { rank: 14, name: "You", handle: "", avatar: "—", theses: 0, winRate: 0, avgReturn: 0, annualized: 0, avgHold: "0d", best: "—", bestRet: 0, isYou: true },
   { rank: 15, name: "Rahul Mehta", handle: "@rmehta", avatar: "RM", theses: 39, winRate: 67, avgReturn: 10.9, annualized: 17.3, avgHold: "28d", best: "JPM · Long · +41%", bestRet: 41 }
 ];
 
