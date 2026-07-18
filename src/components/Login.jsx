@@ -1,4 +1,5 @@
 import SignInButton from './SignInButton.jsx'
+import EmailPasswordForm from './EmailPasswordForm.jsx'
 
 // Full-page sign-in shown when there's no session. Matches the app's serif,
 // white/gray aesthetic.
@@ -16,6 +17,14 @@ export default function Login() {
         <p className="text-[13px] mb-8" style={{ color: 'var(--muted)' }}>
           Sign in to write and track your investment theses.
         </p>
+        <EmailPasswordForm />
+
+        <div className="flex items-center gap-3 my-5">
+          <div className="flex-1 h-px" style={{ background: 'var(--border)' }} />
+          <span className="text-[11px] font-mono uppercase tracking-wider" style={{ color: 'var(--faint)' }}>or</span>
+          <div className="flex-1 h-px" style={{ background: 'var(--border)' }} />
+        </div>
+
         <div className="flex justify-center">
           <SignInButton />
         </div>
