@@ -1,27 +1,51 @@
 import { useMemo, useState } from 'react'
-import { sampleDiscover } from '../data/theses.js'
+import { useDiscoverFeed } from '../lib/useDiscoverFeed.js'
 import { SECTORS } from '../lib/sectors.js'
 
 export default function Discover({ navigate }) {
+  // Every published thesis across the community, loaded from the database.
+  const feed = useDiscoverFeed()
+
   // Title search and sector filter over the community feed.
   const [query, setQuery] = useState('')
   const [sector, setSector] = useState('all')
+  // Sort mode: 'trending' | 'newest' | 'top'.
+  const [sort, setSort] = useState('trending')
 
   // Offer the full canonical sector list, plus any sector present in the feed
   // that isn't already in it, so nothing is unfilterable.
   const sectors = useMemo(
-    () => [...new Set([...SECTORS, ...sampleDiscover.map((t) => t.sector).filter(Boolean)])].sort(),
-    [],
+    () => [...new Set([...SECTORS, ...feed.map((t) => t.sector).filter(Boolean)])].sort(),
+    [feed],
   )
 
   const results = useMemo(() => {
     const q = query.trim().toLowerCase()
-    return sampleDiscover.filter((t) => {
+    const filtered = feed.filter((t) => {
       if (sector !== 'all' && t.sector !== sector) return false
       if (q && !t.title.toLowerCase().includes(q)) return false
       return true
     })
-  }, [query, sector])
+
+    // Age in days since publish; unknown timestamps sort as oldest.
+    const ageDays = (t) => {
+      const ts = t.createdAt ? Date.parse(t.createdAt) : NaN
+      return Number.isNaN(ts) ? Infinity : (Date.now() - ts) / 86400000
+    }
+    // Newest first, by publish timestamp (id as a stable tiebreak).
+    const byNewest = (a, b) => ageDays(a) - ageDays(b) || (b.id ?? 0) - (a.id ?? 0)
+    // Trending blends engagement with recency: each update is worth points, and
+    // theses published in the last ~30 days carry a decaying recency bonus.
+    const trendScore = (t) => (Number(t.updates) || 0) * 5 + Math.max(0, 30 - ageDays(t))
+
+    const cmp = {
+      newest: byNewest,
+      top: (a, b) => (b.ret ?? 0) - (a.ret ?? 0) || byNewest(a, b),
+      trending: (a, b) => trendScore(b) - trendScore(a) || byNewest(a, b),
+    }[sort]
+
+    return [...filtered].sort(cmp)
+  }, [feed, query, sector, sort])
 
   return (
     <>
@@ -33,9 +57,9 @@ export default function Discover({ navigate }) {
             <p className="text-sm mt-1" style={{ color: 'var(--ink-soft)' }}>Recent theses published by the community. Performance is tracked from publish time.</p>
           </div>
           <div className="flex items-center gap-1 p-1 border rounded-md" style={{ borderColor: 'var(--border)', background: 'white' }}>
-            <button className="lb-filter active text-xs px-3 py-1 rounded">Trending</button>
-            <button className="lb-filter text-xs px-3 py-1 rounded">Newest</button>
-            <button className="lb-filter text-xs px-3 py-1 rounded">Top Performers</button>
+            <button type="button" aria-pressed={sort === 'trending'} onClick={() => setSort('trending')} className={`lb-filter text-xs px-3 py-1 rounded ${sort === 'trending' ? 'active' : ''}`}>Trending</button>
+            <button type="button" aria-pressed={sort === 'newest'} onClick={() => setSort('newest')} className={`lb-filter text-xs px-3 py-1 rounded ${sort === 'newest' ? 'active' : ''}`}>Newest</button>
+            <button type="button" aria-pressed={sort === 'top'} onClick={() => setSort('top')} className={`lb-filter text-xs px-3 py-1 rounded ${sort === 'top' ? 'active' : ''}`}>Top Performers</button>
           </div>
         </div>
 
@@ -63,7 +87,7 @@ export default function Discover({ navigate }) {
               <option key={s} value={s}>{s}</option>
             ))}
           </select>
-          <span className="text-xs font-mono ml-auto" style={{ color: 'var(--muted)' }}>{results.length} of {sampleDiscover.length}</span>
+          <span className="text-xs font-mono ml-auto" style={{ color: 'var(--muted)' }}>{results.length} of {feed.length}</span>
         </div>
       </header>
 
@@ -82,7 +106,7 @@ export default function Discover({ navigate }) {
             const sideLabel = t.side === 'bull' ? 'BULL' : 'BEAR'
             const initials = t.author.split(' ').map(n => n[0]).join('')
             return (
-              <div key={i} className="thesis-card rounded-md p-6 cursor-pointer flex flex-col" onClick={() => navigate('thesis')}>
+              <div key={t.id ?? i} className="thesis-card rounded-md p-6 cursor-pointer flex flex-col" onClick={() => navigate('thesis', t)}>
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-2.5">
                     <div className="w-8 h-8 rounded-full flex items-center justify-center font-mono text-[10px] font-semibold" style={{ background: 'var(--bg-warm)', color: 'var(--ink)', border: '1px solid var(--border)' }}>
@@ -90,7 +114,7 @@ export default function Discover({ navigate }) {
                     </div>
                     <div>
                       <div className="text-xs font-medium">{t.author}</div>
-                      <div className="text-[10px] font-mono" style={{ color: 'var(--muted)' }}>{t.handle} · {t.date}</div>
+                      <div className="text-[10px] font-mono" style={{ color: 'var(--muted)' }}>{t.handle ? `${t.handle} · ` : ''}{t.date}</div>
                     </div>
                   </div>
                   <span className={`${sideClass} text-[9px] font-mono font-semibold px-1.5 py-0.5 rounded`}>{sideLabel}</span>
@@ -109,8 +133,7 @@ export default function Discover({ navigate }) {
 
                 <div className="pt-4 border-t flex items-center justify-between text-xs" style={{ borderColor: 'var(--border)' }}>
                   <div className="flex items-center gap-3" style={{ color: 'var(--muted)' }}>
-                    <span className="flex items-center gap-1"><i className="icon-eye text-xs"></i> 1.2k</span>
-                    <span className="flex items-center gap-1"><i className="icon-message-square text-xs"></i> 48</span>
+                    <span className="flex items-center gap-1"><i className="icon-message-square text-xs"></i> {t.updates || 0}</span>
                   </div>
                   <span className="font-medium">Read thesis →</span>
                 </div>
