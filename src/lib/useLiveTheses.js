@@ -1,47 +1,12 @@
-import { useEffect, useState } from 'react'
+import { useData } from '../components/DataProvider.jsx'
 
-// Fetches live native-currency entry/current/return for a set of theses and
-// returns a map keyed by ticker. Position return is side-adjusted (a bear thesis
-// gains when the price falls). Values are null until the fetch resolves; callers
-// fall back to the static numbers so the view is never blank.
-export function useLiveTheses(theses) {
-  const [live, setLive] = useState({})
-
-  // Re-run only when the set of tickers changes, not on every render.
-  const key = theses.map((t) => t.ticker).join(',')
-
-  useEffect(() => {
-    let cancelled = false
-    const items = theses.map((t) => ({ symbol: t.ticker, from: t.entryDate }))
-    if (!items.length) return
-
-    fetch('/api/cards', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ items }),
-    })
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
-      .then((rows) => {
-        if (cancelled || !Array.isArray(rows)) return
-        const bySide = Object.fromEntries(theses.map((t) => [t.ticker, t.side]))
-        const map = {}
-        rows.forEach((q) => {
-          if (!q || q.error || q.priceReturn == null) return
-          const ret = bySide[q.symbol] === 'bear' ? -q.priceReturn : q.priceReturn
-          map[q.symbol] = {
-            currency: q.currency,
-            entry: q.entry,
-            current: q.current,
-            ret: Number(ret.toFixed(1)),
-          }
-        })
-        setLive(map)
-      })
-      .catch(() => { /* keep fallback values */ })
-
-    return () => { cancelled = true }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key])
-
-  return live
+// Live native-currency entry/current/return per ticker, side-adjusted for bear
+// theses. Served from the app-wide cache (see DataProvider), which fetches quotes
+// for the full stored ticker set and polls them in the background.
+//
+// The `theses` argument is retained for call-site compatibility but no longer
+// drives a fetch: the cache holds a superset map keyed by ticker, and every
+// consumer indexes into it by `t.ticker`, so returning the shared map is correct.
+export function useLiveTheses(_theses) {
+  return useData().live
 }

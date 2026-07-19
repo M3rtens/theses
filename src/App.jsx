@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useUser } from './components/UserProvider.jsx'
+import { useData } from './components/DataProvider.jsx'
 import { deleteDraft } from './lib/drafts.js'
 import { createClient } from './lib/supabase/client'
 import Sidebar from './components/Sidebar.jsx'
@@ -20,6 +21,7 @@ import { fmtPrice } from './lib/format.js'
 
 export default function App() {
   const user = useUser()
+  const { refresh } = useData()
   const [view, setView] = useState('dashboard')
   const [editorDraft, setEditorDraft] = useState(null)
   const [activeThesis, setActiveThesis] = useState(null)
@@ -28,6 +30,9 @@ export default function App() {
   const [pendingDraft, setPendingDraft] = useState(null)
   const [publishing, setPublishing] = useState(false)
   const toastTimer = useRef(null)
+  // Skip the cache refresh on the profile upsert's first (mount) run — the
+  // provider already loaded fresh data; only later identity changes need it.
+  const identitySettled = useRef(false)
 
   // A second arg carries a draft into the editor (Continue editing); any other
   // navigation clears it so the editor opens fresh.
@@ -73,8 +78,12 @@ export default function App() {
         avatar: user.avatar,
         updated_at: new Date().toISOString(),
       })
-      .then(() => {}, () => { /* profiles table not ready / offline */ })
-  }, [user?.id, user?.name, user?.handle, user?.avatar])
+      .then(() => {
+        // Reflect a name/avatar change on the leaderboard and community feed.
+        if (identitySettled.current) refresh()
+        identitySettled.current = true
+      }, () => { /* profiles table not ready / offline */ })
+  }, [user?.id, user?.name, user?.handle, user?.avatar, refresh])
 
   const openPublish = useCallback((draft) => {
     setPendingDraft(draft)
@@ -98,6 +107,8 @@ export default function App() {
       if (pendingDraft.draftId) deleteDraft(pendingDraft.draftId, user?.id)
       setPublishOpen(false)
       setPendingDraft(null)
+      // Pull the new thesis into the cache so every view reflects it.
+      refresh()
       showToast(`Thesis published. Entry locked at ${fmtPrice(data.entry, data.currency)} · Timestamp sealed.`)
       setTimeout(() => navigate('mytheses'), 800)
     } catch (e) {

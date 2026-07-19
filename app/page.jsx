@@ -1,6 +1,7 @@
 import App from '../src/App.jsx'
 import Login from '../src/components/Login.jsx'
 import UserProvider from '../src/components/UserProvider.jsx'
+import DataProvider from '../src/components/DataProvider.jsx'
 import { createClient } from '../src/lib/supabase/server'
 import { deriveIdentity } from '../src/lib/user.js'
 
@@ -15,7 +16,9 @@ export default async function Page() {
 
   return (
     <UserProvider user={deriveIdentity(user)}>
-      <App />
+      <DataProvider>
+        <App />
+      </DataProvider>
     </UserProvider>
   )
 }

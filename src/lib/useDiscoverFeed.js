@@ -1,19 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useData } from '../components/DataProvider.jsx'
 
-// Loads the community feed (every published thesis across all users, joined to
-// author profiles) from /api/discover. Returns [] until it resolves, or on
-// failure.
+// The community feed (every published thesis across all users, joined to author
+// profiles). Served from the app-wide cache (see DataProvider) — loaded once at
+// startup and refreshed after mutations, so switching views is instant.
 export function useDiscoverFeed() {
-  const [feed, setFeed] = useState([])
-
-  useEffect(() => {
-    let cancelled = false
-    fetch('/api/discover')
-      .then((r) => (r.ok ? r.json() : []))
-      .then((rows) => { if (!cancelled && Array.isArray(rows)) setFeed(rows) })
-      .catch(() => { /* feed unavailable */ })
-    return () => { cancelled = true }
-  }, [])
-
-  return feed
+  return useData().discover
 }

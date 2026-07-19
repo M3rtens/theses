@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useData } from '../components/DataProvider.jsx'
 import PriceChart from '../components/PriceChart.jsx'
 import SpreadsheetViewer from '../components/SpreadsheetViewer.jsx'
 import { fmtPrice } from '../lib/format.js'
@@ -33,6 +34,9 @@ function rangeFrom(range, entryDate) {
 }
 
 export default function ThesisDetail({ navigate, thesis }) {
+  // Refresh the app-wide cache after lifecycle mutations so the counts and
+  // statuses on other views (My Theses, Triggers, Leaderboard) stay in step.
+  const { refresh } = useData()
   // The thesis to show comes from navigation. Guard against a direct load with no
   // selection so the hooks below still run against a defined object.
   const base = thesis || {}
@@ -177,6 +181,7 @@ export default function ThesisDetail({ navigate, thesis }) {
       setUpdateLog((log) => [...log, saved])
       setDraft('')
       setComposerOpen(false)
+      refresh()
     } catch (e) {
       setSaveError(e.message)
     } finally {
@@ -224,6 +229,7 @@ export default function ThesisDetail({ navigate, thesis }) {
       const saved = await patchLifecycle({ action: 'schedule-close', closeDate: closeDateDraft })
       setCloseDate(saved.closeDate)
       setCloseDatePickerOpen(false)
+      refresh()
     } catch (e) {
       setLifecycleError(e.message)
     } finally {
@@ -248,6 +254,7 @@ export default function ThesisDetail({ navigate, thesis }) {
       setStatus('closed')
       setClosedInfo({ closePrice: saved.closePrice, closeReturn: saved.closeReturn, closedAt: saved.closedAt })
       setCloseModalOpen(false)
+      refresh()
     } catch (e) {
       setLifecycleError(e.message)
     } finally {
