@@ -264,13 +264,26 @@ body::before {
 .excel-color-control:hover { border-color: #c8c8c8; background: #e9f3ed; }
 .excel-color-control input { width: 22px; height: 8px; border: 0; padding: 0; background: transparent; cursor: pointer; }
 .excel-color-control.fill span { color: #d7a800; }
+.excel-ribbon-select { height: 26px; align-self: center; border: 1px solid #c8c8c8; border-radius: 2px; background: white; padding: 0 4px; color: #303030; cursor: pointer; font-size: 11px; outline: none; }
+.excel-ribbon-select:hover { border-color: #217346; }
+.excel-ribbon-select:focus { border-color: #217346; box-shadow: inset 0 0 0 1px #217346; }
+.excel-ribbon-select.narrow { width: 52px; }
 .excel-formula-row { display: grid; grid-template-columns: 92px 35px minmax(0, 1fr); min-height: 34px; align-items: stretch; border-bottom: 1px solid #bfbfbf; background: #fafafa; }
 .excel-formula-row form { display: flex; }
 .excel-name-box { width: 100%; border: 0; border-right: 1px solid #c8c8c8; background: white; padding: 0 8px; color: #333; font: 11px 'JetBrains Mono', ui-monospace, monospace; outline: none; text-align: center; }
 .excel-name-box:focus { box-shadow: inset 0 0 0 2px #217346; }
-.excel-formula-icon { display: grid; place-items: center; border-right: 1px solid #d4d4d4; color: #5d5d5d; font: italic 13px Georgia, serif; }
+.excel-formula-icon { display: grid; place-items: center; border: 0; border-right: 1px solid #d4d4d4; background: #fafafa; padding: 0; color: #5d5d5d; font: italic 13px Georgia, serif; }
+button.excel-formula-icon { cursor: pointer !important; }
+button.excel-formula-icon:hover, button.excel-formula-icon:focus-visible { background: #e9f3ed; color: #185c37; outline: none; box-shadow: inset 0 0 0 2px #217346; }
 .spreadsheet-formula-bar { min-width: 0; border: 0; background: white; padding: 6px 9px; color: #222; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 11px; outline: none; }
 .spreadsheet-formula-bar:focus { box-shadow: inset 0 0 0 2px #217346; }
+.spreadsheet-formula-wrap { position: relative; display: flex; min-width: 0; }
+.spreadsheet-formula-wrap .spreadsheet-formula-bar { width: 100%; }
+.spreadsheet-formula-suggestions { position: absolute; z-index: 2050; top: calc(100% + 1px); left: 0; width: min(420px, 100%); overflow: hidden; border: 1px solid #b9b9b9; border-radius: 0 0 5px 5px; background: white; box-shadow: 0 8px 22px rgb(0 0 0 / 16%); }
+.spreadsheet-formula-suggestions button { display: grid; width: 100%; grid-template-columns: 118px minmax(0, 1fr); gap: 8px; border: 0; background: white; padding: 6px 9px; color: #222; cursor: pointer; text-align: left; }
+.spreadsheet-formula-suggestions button:hover, .spreadsheet-formula-suggestions button:focus { background: #e9f3ed; outline: none; }
+.spreadsheet-formula-suggestions button span { color: #185c37; font: 650 11px 'JetBrains Mono', ui-monospace, monospace; }
+.spreadsheet-formula-suggestions button small { overflow: hidden; color: #666; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
 .spreadsheet-hot { position: relative; background: #fff; }
 .spreadsheet-hot ::-webkit-scrollbar { width: 10px; height: 10px; }
 .spreadsheet-hot ::-webkit-scrollbar-button,
@@ -286,12 +299,15 @@ body::before {
 .spreadsheet-grid-theme { --ht-cell-horizontal-border-color: #d9d9d9; --ht-cell-vertical-border-color: #d9d9d9; --ht-wrapper-border-color: #bfbfbf; --ht-accent-color: #217346; --ht-foreground-color: #222; --ht-background-color: #fff; --ht-row-header-background-color: #f3f3f3; --ht-row-header-foreground-color: #555; --ht-column-header-background-color: #f3f3f3; --ht-column-header-foreground-color: #333; font-family: Arial, sans-serif; }
 .spreadsheet-grid-theme .handsontable th { font-size: 11px; font-weight: 400; }
 .spreadsheet-grid-theme .handsontable td { padding: 2px 5px; font-size: 11px; }
+/* Vertically centre cell text by default (Excel-like); explicit Top/Middle/Bottom still win. */
+.spreadsheet-grid-theme .handsontable td:not(.htTop):not(.htMiddle):not(.htBottom) { vertical-align: middle; }
 .spreadsheet-grid-theme .handsontable .area, .spreadsheet-grid-theme .handsontable .area-1, .spreadsheet-grid-theme .handsontable .area-2 { background: rgb(33 115 70 / 8%); }
 .spreadsheet-grid-theme .handsontable .currentRow, .spreadsheet-grid-theme .handsontable .currentCol { background: #f7fbf8; }
 .spreadsheet-grid-theme .handsontable th.ht__highlight { background: #e2f0e7; color: #185c37; font-weight: 650; }
 .spreadsheet-grid-theme td.cell-bold { font-weight: 700; }
 .spreadsheet-grid-theme td.cell-italic { font-style: italic; }
 .spreadsheet-grid-theme td.cell-underline { text-decoration: underline; }
+.spreadsheet-grid-theme td.cell-wrap { white-space: normal; word-break: break-word; }
 .excel-bottom-bar { display: flex; min-height: 37px; align-items: stretch; border-top: 1px solid #c7c7c7; background: #f3f3f3; }
 .spreadsheet-sheets { display: flex; min-width: 0; flex: 1; align-items: stretch; gap: 0; overflow-x: auto; padding-left: 5px; }
 .excel-add-sheet { width: 36px; flex: 0 0 36px; border: 0; background: transparent; color: #4a4a4a; cursor: pointer; }
@@ -305,6 +321,8 @@ body::before {
 .spreadsheet-sheet-menu { position: fixed; z-index: 2000; min-width: 196px; padding: 4px; border: 1px solid var(--border-strong); border-radius: 6px; background: white; box-shadow: 0 10px 28px rgb(20 24 28 / 18%); }
 .spreadsheet-sheet-menu-item { display: flex; width: 100%; align-items: center; gap: 8px; border: 0; border-radius: 4px; background: transparent; padding: 8px 10px; color: var(--ink); cursor: pointer; font-size: 12px; text-align: left; }
 .spreadsheet-sheet-menu-item:hover { background: var(--bg-warm); }
+.spreadsheet-sheet-menu-item:disabled { color: var(--faint); cursor: not-allowed; }
+.spreadsheet-sheet-menu-item:disabled:hover { background: transparent; }
 .spreadsheet-sheet-menu-item.danger { color: var(--bear); }
 .spreadsheet-sheet-menu-item.danger:hover { background: var(--bear-soft); }
 .spreadsheet-sheet-rename { display: grid; gap: 6px; padding: 6px; }
@@ -318,6 +336,57 @@ body::before {
 .spreadsheet-sheet-rename-actions button:hover { background: var(--bg-warm); }
 .spreadsheet-sheet-rename-actions button.primary { border-color: var(--ink); background: var(--ink); color: white; }
 .htDropdownMenu, .htContextMenu { z-index: 50 !important; }
+.spreadsheet-find-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; border-bottom: 1px solid #bfbfbf; background: #fbfbf7; padding: 6px 9px; }
+.spreadsheet-find-input { width: 150px; border: 1px solid #c8c8c8; border-radius: 3px; padding: 4px 7px; color: #222; font-size: 11px; outline: none; }
+.spreadsheet-find-input:focus { border-color: #217346; box-shadow: inset 0 0 0 1px #217346; }
+.spreadsheet-find-bar > button { border: 1px solid #c8c8c8; border-radius: 3px; background: white; padding: 4px 9px; color: #303030; cursor: pointer; font-size: 11px; }
+.spreadsheet-find-bar > button:hover { border-color: #217346; background: #e9f3ed; color: #185c37; }
+.spreadsheet-find-toggle { display: inline-flex; align-items: center; gap: 4px; color: #555; font-size: 11px; cursor: pointer; }
+.spreadsheet-find-status { color: #185c37; font-size: 11px; font-weight: 600; }
+.spreadsheet-find-close { margin-left: auto; display: grid; place-items: center; width: 26px; padding: 0 !important; }
+.spreadsheet-modal-backdrop { position: fixed; inset: 0; z-index: 2100; display: grid; place-items: center; background: rgb(20 24 28 / 32%); }
+.spreadsheet-fx-panel { display: flex; flex-direction: column; width: min(440px, 92vw); max-height: min(560px, 84vh); overflow: hidden; border: 1px solid var(--border-strong); border-radius: 8px; background: white; box-shadow: 0 18px 46px rgb(20 24 28 / 26%); }
+.spreadsheet-fx-header { display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border); padding: 12px 14px; font-weight: 650; color: var(--ink); }
+.spreadsheet-fx-header button { display: grid; place-items: center; width: 26px; height: 26px; border: 0; border-radius: 4px; background: transparent; color: var(--muted); cursor: pointer; }
+.spreadsheet-fx-header button:hover { background: var(--bg-warm); color: var(--ink); }
+.spreadsheet-fx-search { margin: 12px 14px 6px; border: 1px solid var(--border-strong); border-radius: 5px; padding: 7px 9px; color: var(--ink); font-size: 12px; outline: none; }
+.spreadsheet-fx-search:focus { border-color: #217346; }
+.spreadsheet-fx-list { overflow-y: auto; padding: 4px 8px 10px; }
+.spreadsheet-fx-empty { padding: 16px; color: var(--muted); font-size: 12px; text-align: center; }
+.spreadsheet-fx-category { padding: 10px 6px 4px; color: var(--muted); font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; }
+.spreadsheet-fx-item { display: flex; flex-direction: column; gap: 1px; width: 100%; border: 0; border-radius: 5px; background: transparent; padding: 7px 8px; cursor: pointer; text-align: left; }
+.spreadsheet-fx-item:hover { background: #e9f3ed; }
+.spreadsheet-fx-name { color: #185c37; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 12px; font-weight: 650; }
+.spreadsheet-fx-desc { color: var(--ink-soft); font-size: 11px; line-height: 1.35; }
+.excel-qat { display: flex; align-items: center; gap: 2px; margin-right: 2px; }
+.excel-qat button { display: grid; place-items: center; width: 26px; height: 26px; border: 0; border-radius: 3px; background: transparent; color: rgb(255 255 255 / 88%); cursor: pointer; font-size: 13px; }
+.excel-qat button:hover { background: rgb(255 255 255 / 16%); }
+.excel-ribbon-button.menu { position: relative; padding-right: 15px; }
+.excel-ribbon-caret { position: absolute; right: 3px; bottom: 4px; font-size: 9px; opacity: 0.65; }
+.excel-ribbon-button.font-step { min-width: 28px; }
+.excel-ribbon-button.font-step span { font-weight: 700; line-height: 1; }
+.excel-ribbon-select.wide { width: 108px; }
+.excel-ribbon-menu { position: fixed; z-index: 2000; min-width: 198px; max-height: min(420px, 70vh); overflow-y: auto; padding: 4px; border: 1px solid var(--border-strong); border-radius: 6px; background: white; box-shadow: 0 10px 28px rgb(20 24 28 / 18%); }
+.excel-ribbon-menu-item { display: flex; width: 100%; align-items: center; gap: 8px; border: 0; border-radius: 4px; background: transparent; padding: 7px 10px; color: var(--ink); cursor: pointer; font-size: 12px; text-align: left; }
+.excel-ribbon-menu-item:hover { background: #e9f3ed; }
+.excel-ribbon-menu-item.danger { color: var(--bear); }
+.excel-ribbon-menu-item.danger:hover { background: var(--bear-soft); }
+.excel-ribbon-menu-sep { height: 1px; margin: 4px 6px; background: var(--border); }
+.excel-ribbon-tabs.viewer button:disabled { cursor: default; opacity: 0.62; }
+.excel-viewer-ribbon { min-height: 58px; align-items: center; gap: 0; overflow: hidden; padding: 5px 8px; }
+.excel-viewer-ribbon-group { display: flex; min-height: 45px; align-items: center; gap: 7px; border-right: 1px solid #dedede; padding: 0 16px; color: #555; font-size: 11px; }
+.excel-viewer-ribbon-group:first-child { color: #185c37; font-weight: 650; }
+.excel-viewer-ribbon-group:last-child { border-right: 0; }
+.spreadsheet-find-title { color: #185c37; font-size: 11px; font-weight: 650; margin-right: 2px; }
+.spreadsheet-find-link { background: transparent !important; border-color: transparent !important; color: #185c37 !important; }
+.spreadsheet-find-link:hover { text-decoration: underline; }
+.excel-zoom { display: flex; align-items: center; gap: 6px; }
+.excel-zoom button { display: grid; place-items: center; width: 18px; height: 18px; border: 1px solid transparent; border-radius: 3px; background: transparent; color: #444; cursor: pointer; font-size: 13px; line-height: 1; }
+.excel-zoom button:hover { border-color: #c8c8c8; background: #e9f3ed; }
+.excel-zoom-value { min-width: 34px; text-align: center; }
+.spreadsheet-grid-theme.no-gridlines td { border-color: transparent !important; }
+.excel-workbook-shell:fullscreen { width: 100vw; height: 100vh; border: 0; border-radius: 0; background: white; }
+.excel-workbook-shell:fullscreen .spreadsheet-hot { height: calc(100vh - 201px); overflow: hidden; }
 @media (max-width: 720px) {
   .excel-saved-state, .excel-title-actions button span, .excel-status-bar span:not(.excel-zoom) { display: none; }
   .excel-title-actions button { width: 32px; justify-content: center; padding: 0; }
