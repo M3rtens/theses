@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { useUser } from './components/UserProvider.jsx'
 import { useData } from './components/DataProvider.jsx'
 import { deleteDraft } from './lib/drafts.js'
@@ -19,10 +20,13 @@ import Triggers from './views/Triggers.jsx'
 import Discover from './views/Discover.jsx'
 import { fmtPrice } from './lib/format.js'
 
+const PROTECTED_VIEWS = new Set(['dashboard', 'editor', 'profile', 'mytheses', 'drafts', 'triggers'])
+
 export default function App() {
   const user = useUser()
+  const router = useRouter()
   const { refresh } = useData()
-  const [view, setView] = useState('dashboard')
+  const [view, setView] = useState(() => (user ? 'dashboard' : 'discover'))
   const [editorDraft, setEditorDraft] = useState(null)
   const [activeThesis, setActiveThesis] = useState(null)
   const [toast, setToast] = useState('')
@@ -37,11 +41,25 @@ export default function App() {
   // A second arg carries a draft into the editor (Continue editing); any other
   // navigation clears it so the editor opens fresh.
   const navigate = useCallback((next, payload = null) => {
+    if (!user && PROTECTED_VIEWS.has(next)) {
+      router.push('/sign-in')
+      return
+    }
     setEditorDraft(next === 'editor' ? payload : null)
     if (next === 'thesis') setActiveThesis(payload)
     setView(next)
     window.scrollTo(0, 0)
-  }, [])
+  }, [router, user])
+
+  // A sign-out refresh can preserve client component state. Move any protected
+  // view back to the public feed as soon as the session disappears.
+  useEffect(() => {
+    if (!user && PROTECTED_VIEWS.has(view)) {
+      setEditorDraft(null)
+      setActiveThesis(null)
+      setView('discover')
+    }
+  }, [user, view])
 
   const showToast = useCallback((msg) => {
     setToast(msg)
@@ -86,12 +104,16 @@ export default function App() {
   }, [user?.id, user?.name, user?.handle, user?.avatar, refresh])
 
   const openPublish = useCallback((draft) => {
+    if (!user) {
+      router.push('/sign-in')
+      return
+    }
     setPendingDraft(draft)
     setPublishOpen(true)
-  }, [])
+  }, [router, user])
 
   const confirmPublish = async () => {
-    if (!pendingDraft || publishing) return
+    if (!user || !pendingDraft || publishing) return
     setPublishing(true)
     showToast('Publishing · locking entry price from exchange feed…')
     try {
@@ -123,7 +145,7 @@ export default function App() {
       case 'dashboard': return <Dashboard navigate={navigate} />
       case 'editor': return <Editor key={editorDraft?.id || 'new'} draft={editorDraft} navigate={navigate} showToast={showToast} onOpenPublish={openPublish} />
       case 'thesis': return <ThesisDetail navigate={navigate} thesis={activeThesis} />
-      case 'leaderboard': return <Leaderboard navigate={navigate} />
+      case 'leaderboard': return <Leaderboard />
       case 'profile': return <Profile navigate={navigate} />
       case 'mytheses': return <MyTheses navigate={navigate} />
       case 'drafts': return <Drafts navigate={navigate} />

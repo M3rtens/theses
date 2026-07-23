@@ -152,10 +152,9 @@ export default function ThesisDetail({ navigate, thesis }) {
   const fmtStamp = (iso) => new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })
   const created = base.createdAt ? fmtStamp(base.createdAt) : base.publishDate
 
-  // Appending updates is only permitted on a thesis you own — i.e. one persisted
-  // in the store (it carries a server-stamped createdAt). Sample theses are
-  // read-only demos, so the composer stays closed for them.
-  const owned = Boolean(base.createdAt)
+  // Ownership comes from the database row, not from presentation fields such as
+  // createdAt. This keeps community theses read-only for guests and other users.
+  const owned = Boolean(user?.id && base.ownerId === user.id)
 
   // The update log, seeded from the stored thesis and grown in place as the
   // author appends notes, so newly saved updates appear without a reload.
@@ -277,7 +276,7 @@ export default function ThesisDetail({ navigate, thesis }) {
       <header className="px-12 pt-6 pb-5 border-b" style={{ borderColor: 'var(--border)' }}>
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-3 text-sm">
-            <button onClick={() => navigate('dashboard')} className="hover:underline" style={{ color: 'var(--ink-soft)', background: 'transparent', border: 'none', cursor: 'pointer' }}>Dashboard</button>
+            <button onClick={() => navigate(user ? 'dashboard' : 'discover')} className="hover:underline" style={{ color: 'var(--ink-soft)', background: 'transparent', border: 'none', cursor: 'pointer' }}>{user ? 'Dashboard' : 'Discover'}</button>
             <span style={{ color: 'var(--faint)' }}>/</span>
             <span style={{ color: 'var(--ink-soft)' }}>{base.status === 'closed' ? 'Closed Theses' : 'Active Theses'}</span>
             <span style={{ color: 'var(--faint)' }}>/</span>
@@ -391,6 +390,20 @@ export default function ThesisDetail({ navigate, thesis }) {
             <div>
               <h4 className="font-serif text-base font-medium mb-3">Thesis Controls</h4>
               <div className="space-y-2">
+                {!user && (
+                  <button
+                    type="button"
+                    onClick={() => navigate('editor')}
+                    className="w-full text-left p-3 border rounded text-xs hover:bg-gray-50"
+                    style={{ borderColor: 'var(--border-strong)', background: 'white', cursor: 'pointer' }}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-medium">Sign in to publish</span>
+                      <i className="icon-log-in text-xs"></i>
+                    </div>
+                    <p style={{ color: 'var(--muted)' }} className="mt-0.5">Create and manage your own theses</p>
+                  </button>
+                )}
                 <button
                   onClick={openComposer}
                   disabled={!owned}
@@ -401,7 +414,7 @@ export default function ThesisDetail({ navigate, thesis }) {
                     <span className="font-medium">Append Update</span>
                     <i className="icon-plus text-xs"></i>
                   </div>
-                  <p style={{ color: 'var(--muted)' }} className="mt-0.5">{owned ? 'Add timestamped note' : 'Only on your own theses'}</p>
+                  <p style={{ color: 'var(--muted)' }} className="mt-0.5">{owned ? 'Add timestamped note' : user ? 'Only on your own theses' : 'Sign in to manage theses'}</p>
                 </button>
                 {(() => {
                   const scheduleActive = owned && !isClosed && !closeDate

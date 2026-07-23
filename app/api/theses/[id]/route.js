@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getThesis, updateThesis } from '../../../../src/lib/thesesStore.js'
+import { errorStatus, requireUserContext } from '../../../../src/lib/auth.js'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -13,6 +14,12 @@ const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/
 // Both are one-way: a scheduled close date can't be changed once set, and a
 // closed thesis can't be reopened — the same integrity model as the entry lock.
 export async function PATCH(request, { params }) {
+  try {
+    await requireUserContext()
+  } catch (e) {
+    return NextResponse.json({ error: e.message }, { status: errorStatus(e) })
+  }
+
   const { id } = await params
 
   let body
@@ -22,7 +29,12 @@ export async function PATCH(request, { params }) {
     return NextResponse.json({ error: 'invalid JSON body' }, { status: 400 })
   }
 
-  const thesis = await getThesis(id)
+  let thesis
+  try {
+    thesis = await getThesis(id)
+  } catch (e) {
+    return NextResponse.json({ error: e.message }, { status: errorStatus(e) })
+  }
   if (!thesis) {
     return NextResponse.json({ error: 'thesis not found' }, { status: 404 })
   }
@@ -48,7 +60,7 @@ export async function PATCH(request, { params }) {
       const saved = await updateThesis(id, { closeDate })
       return NextResponse.json(saved)
     } catch (e) {
-      return NextResponse.json({ error: e.message }, { status: 500 })
+      return NextResponse.json({ error: e.message }, { status: errorStatus(e) })
     }
   }
 
@@ -84,7 +96,7 @@ export async function PATCH(request, { params }) {
       })
       return NextResponse.json(saved)
     } catch (e) {
-      return NextResponse.json({ error: e.message }, { status: 500 })
+      return NextResponse.json({ error: e.message }, { status: errorStatus(e) })
     }
   }
 

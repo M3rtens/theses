@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '../../../src/lib/supabase/server'
+import { createAdminClient } from '../../../src/lib/supabase/admin.js'
 import { makeRetOf } from '../../../src/lib/stats.js'
 
 export const runtime = 'nodejs'
@@ -20,16 +20,14 @@ function snippetFrom(html) {
   return text.slice(0, 180).replace(/\s+\S*$/, '') + '…'
 }
 
-// GET /api/discover -> the community feed: every published thesis across all
-// users (public read policy → all rows), joined to its author's public profile
-// for identity. Newest first. Shape matches what the Discover cards expect.
+// GET /api/discover -> a deliberately public, read-only projection of every
+// published thesis, joined to its author's public profile. Newest first.
 export async function GET() {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) {
-    return NextResponse.json({ error: 'not authenticated' }, { status: 401 })
+  let supabase
+  try {
+    supabase = createAdminClient()
+  } catch (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
   const [thesesRes, profilesRes] = await Promise.all([
@@ -51,7 +49,7 @@ export async function GET() {
   const retOf = makeRetOf(null)
 
   const feed = (thesesRes.data || []).map((row) => {
-    const thesis = { ...row.data, id: row.id }
+    const thesis = { ...row.data, id: row.id, ownerId: row.user_id }
     const p = profileById[row.user_id] || {}
     return {
       // Carry the whole thesis so opening a card can route to the real detail.

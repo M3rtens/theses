@@ -1,8 +1,8 @@
+import Link from 'next/link'
 import SignInButton from './SignInButton.jsx'
 import EmailPasswordForm from './EmailPasswordForm.jsx'
 
-// Full-page sign-in shown when there's no session. Matches the app's serif,
-// white/gray aesthetic.
+// Dedicated sign-in page reached from the guest sidebar.
 export default function Login() {
   return (
     <div className="min-h-screen flex items-center justify-center px-6" style={{ background: 'var(--bg)' }}>
@@ -28,6 +28,14 @@ export default function Login() {
         <div className="flex justify-center">
           <SignInButton />
         </div>
+        <Link
+          href="/"
+          className="inline-flex items-center gap-1.5 text-xs mt-6 hover:underline"
+          style={{ color: 'var(--ink-soft)' }}
+        >
+          <i className="icon-arrow-left text-[11px]"></i>
+          Continue browsing as a guest
+        </Link>
         <p className="text-[11px] font-mono mt-8" style={{ color: 'var(--faint)' }}>
           Integrity-protected · timestamps are system-generated
         </p>

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '../../../src/lib/supabase/server'
+import { createAdminClient } from '../../../src/lib/supabase/admin.js'
 import { refreshStoredTriggers } from '../../../src/lib/evaluateTriggers.js'
 import { makeRetOf, selfStats } from '../../../src/lib/stats.js'
 
@@ -10,24 +11,30 @@ export const dynamic = 'force-dynamic'
 // theses, joined to their public profile for identity. Returns rows in the same
 // shape the leaderboard/profile views expect.
 export async function GET() {
-  const supabase = await createClient()
+  const sessionClient = await createClient()
   const {
     data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) {
-    return NextResponse.json({ error: 'not authenticated' }, { status: 401 })
+  } = await sessionClient.auth.getUser()
+
+  let supabase
+  try {
+    supabase = createAdminClient()
+  } catch (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
   // Refresh the caller's own theses first (user-scoped), so their row reflects
   // current prices. Other analysts refresh when they next visit. Non-fatal.
-  try {
-    await refreshStoredTriggers()
-  } catch {
-    /* leave stored figures as-is */
+  if (user) {
+    try {
+      await refreshStoredTriggers()
+    } catch {
+      /* leave stored figures as-is */
+    }
   }
 
   const [thesesRes, profilesRes] = await Promise.all([
-    supabase.from('theses').select('user_id, data'), // public read policy → all rows
+    supabase.from('theses').select('user_id, data'),
     supabase.from('profiles').select('id, name, handle, avatar'),
   ])
   if (thesesRes.error) {
@@ -56,7 +63,7 @@ export async function GET() {
         name: p.name || 'Analyst',
         handle: p.handle || '',
         avatar: p.avatar || (p.name ? p.name.slice(0, 2).toUpperCase() : '—'),
-        isYou: uid === user.id,
+        isYou: uid === user?.id,
         ...selfStats(theses, retOf),
       }
     })

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { listTheses, addThesis } from '../../../src/lib/thesesStore.js'
+import { errorStatus, requireUserContext } from '../../../src/lib/auth.js'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -9,7 +10,7 @@ export async function GET() {
   try {
     return NextResponse.json(await listTheses())
   } catch (e) {
-    return NextResponse.json({ error: e.message }, { status: 500 })
+    return NextResponse.json({ error: e.message }, { status: errorStatus(e) })
   }
 }
 
@@ -20,6 +21,12 @@ const TRIGGER_STATUS = new Set(['clear', 'warning', 'breached'])
 // sector?, body?, triggers? }. The entry price is sealed server-side at the live
 // native-currency price — the client cannot set or backdate it.
 export async function POST(request) {
+  try {
+    await requireUserContext()
+  } catch (e) {
+    return NextResponse.json({ error: e.message }, { status: errorStatus(e) })
+  }
+
   let body
   try {
     body = await request.json()
@@ -128,6 +135,6 @@ export async function POST(request) {
     const saved = await addThesis(record)
     return NextResponse.json(saved, { status: 201 })
   } catch (e) {
-    return NextResponse.json({ error: e.message }, { status: 500 })
+    return NextResponse.json({ error: e.message }, { status: errorStatus(e) })
   }
 }

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { appendUpdate } from '../../../../../src/lib/thesesStore.js'
+import { errorStatus, requireUserContext } from '../../../../../src/lib/auth.js'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -7,6 +8,12 @@ export const dynamic = 'force-dynamic'
 // POST /api/theses/:id/updates -> append a timestamped update note to a thesis.
 // Body: { text }. The timestamp is sealed server-side; the client cannot set it.
 export async function POST(request, { params }) {
+  try {
+    await requireUserContext()
+  } catch (e) {
+    return NextResponse.json({ error: e.message }, { status: errorStatus(e) })
+  }
+
   const { id } = await params
 
   let body
@@ -28,6 +35,6 @@ export async function POST(request, { params }) {
     }
     return NextResponse.json(update, { status: 201 })
   } catch (e) {
-    return NextResponse.json({ error: e.message }, { status: 500 })
+    return NextResponse.json({ error: e.message }, { status: errorStatus(e) })
   }
 }

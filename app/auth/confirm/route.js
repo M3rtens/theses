@@ -18,5 +18,5 @@ export async function GET(request) {
   }
 
   // Invalid or expired link — back to login.
-  return NextResponse.redirect(`${origin}/`)
+  return NextResponse.redirect(`${origin}/sign-in`)
 }

@@ -1,5 +1,4 @@
 import App from '../src/App.jsx'
-import Login from '../src/components/Login.jsx'
 import UserProvider from '../src/components/UserProvider.jsx'
 import DataProvider from '../src/components/DataProvider.jsx'
 import { createClient } from '../src/lib/supabase/server'
@@ -11,11 +10,10 @@ export default async function Page() {
     data: { user },
   } = await supabase.auth.getUser()
 
-  // No session → gate the whole app behind the login screen.
-  if (!user) return <Login />
-
+  // Resolve identity without gating the page: guests receive the same app shell
+  // with public navigation and read-only community data.
   return (
-    <UserProvider user={deriveIdentity(user)}>
+    <UserProvider user={user ? deriveIdentity(user) : null}>
       <DataProvider>
         <App />
       </DataProvider>

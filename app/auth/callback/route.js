@@ -18,6 +18,6 @@ export async function GET(request) {
   }
 
   // Something went wrong exchanging the code — send the user back to the login
-  // screen (the home route renders it when there's no session).
-  return NextResponse.redirect(`${origin}/`)
+  // dedicated sign-in route.
+  return NextResponse.redirect(`${origin}/sign-in`)
 }

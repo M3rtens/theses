@@ -47,6 +47,7 @@ export default function EmailPasswordForm() {
         })
         if (error) throw error
         if (data.session) {
+          router.replace('/')
           router.refresh() // confirmation disabled — signed in immediately
         } else {
           setNotice('Check your email for a confirmation link to finish signing up.')
@@ -54,6 +55,7 @@ export default function EmailPasswordForm() {
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password })
         if (error) throw error
+        router.replace('/')
         router.refresh()
       }
     } catch (err) {

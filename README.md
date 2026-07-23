@@ -10,12 +10,13 @@ The repository currently contains a working Next.js prototype with Supabase auth
 
 The main product workflow is implemented:
 
-1. Sign in with email/password or Google.
-2. Search for a security and inspect its current price and financial statements.
-3. Write a bull or bear thesis, define invalidation triggers, and optionally attach a spreadsheet model.
-4. Save the work as a browser-local draft or publish it.
-5. On publication, seal the entry price and timestamp on the server.
-6. Track returns, trigger status, updates, and the eventual closing price.
+1. Browse the public Discover feed, leaderboard, and published thesis details as a guest.
+2. Sign in with email/password or Google to access the private workspace.
+3. Search for a security and inspect its current price and financial statements.
+4. Write a bull or bear thesis, define invalidation triggers, and optionally attach a spreadsheet model.
+5. Save the work as a browser-local draft or publish it.
+6. On publication, seal the entry price and timestamp on the server.
+7. Track returns, trigger status, updates, and the eventual closing price.
 
 This is still a prototype rather than a production-ready service. See [Known limitations](#known-limitations) for the features that are represented in the interface but are not yet fully implemented.
 
@@ -23,6 +24,8 @@ This is still a prototype rather than a production-ready service. See [Known lim
 
 ### Authentication and accounts
 
+- Guest-first public browsing; the home page does not require an account.
+- Dedicated `/sign-in` page linked from the bottom of the guest sidebar.
 - Supabase SSR authentication with session-cookie refresh middleware.
 - Email/password sign-in and account creation.
 - Optional email confirmation through `/auth/confirm`.
@@ -74,7 +77,7 @@ This is still a prototype rather than a production-ready service. See [Known lim
 
 ### Community
 
-- Discover feed built from all published theses visible to authenticated users.
+- Public Discover feed built from all published theses.
 - Database-wide analyst leaderboard.
 - Search, sorting, and filtering controls.
 - Public profile identity joined from the `profiles` table.
@@ -140,7 +143,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
 SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
 ```
 
-`NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` are used by both browser and server Supabase clients. `SUPABASE_SERVICE_ROLE_KEY` is used only by the account-deletion route and must never be exposed to browser code or committed to Git.
+`NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` are used by both browser and server Supabase clients. `SUPABASE_SERVICE_ROLE_KEY` is used only on the server for account deletion and the deliberately public, read-only Discover and leaderboard projections. It must never be exposed to browser code or committed to Git.
 
 ### 3. Configure Supabase Auth
 
@@ -169,7 +172,7 @@ This repository does not currently contain Supabase migrations. The application 
 
 The code assumes:
 
-- Authenticated users can read all `theses` and `profiles` rows for the community feed and leaderboard.
+- Public community reads go through server route handlers that return limited projections using the service-role client; the browser does not receive the service key.
 - Users can insert and update only their own thesis rows.
 - Users can insert or update only the profile whose `id` matches their Auth user ID.
 - `theses.user_id` and `profiles.id` reference `auth.users.id`.
@@ -279,7 +282,7 @@ npm run seed:screenshots -- --clean
 
 ## Application architecture
 
-The root App Router page authenticates the request on the server. Authenticated users enter a client-side workspace whose views are coordinated by `src/App.jsx`. Shared data is loaded once into `DataProvider`, and live quotes are refreshed in the background.
+The root App Router page resolves the session on the server but renders for both guests and authenticated users. Guests enter the public Discover view; authenticated users enter their private dashboard. Client-side views are coordinated by `src/App.jsx`, shared data is loaded once into `DataProvider`, and live quotes are refreshed in the background.
 
 ```text
 app/
@@ -287,7 +290,8 @@ app/
   auth/                        OAuth and email-confirmation callbacks
   globals.css                  Application and spreadsheet styling
   layout.jsx                   Root metadata and external font/icon assets
-  page.jsx                     Server-side authentication gate
+  page.jsx                     Guest-or-user session bootstrap
+  sign-in/page.jsx             Dedicated authentication page
 
 src/
   components/                  Shared UI and spreadsheet components
@@ -317,7 +321,7 @@ tests/
 | `/api/theses/[id]` | `PATCH` | Schedule a close date or close a thesis immediately. |
 | `/api/theses/[id]/updates` | `POST` | Append a server-timestamped update. |
 | `/api/theses/evaluate` | `POST` | Refresh active returns and trigger statuses. |
-| `/api/discover` | `GET` | Return the authenticated community thesis feed. |
+| `/api/discover` | `GET` | Return the public community thesis feed. |
 | `/api/leaderboard` | `GET` | Compute database-wide analyst rankings. |
 | `/api/search` | `GET` | Search Yahoo Finance securities. |
 | `/api/quotes` | `GET` | Fetch lightweight quotes for a symbol list. |

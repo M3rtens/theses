@@ -22,7 +22,7 @@ const SECTOR_BY_TICKER = {
   COST: 'Consumer', UBER: 'Tech', ENPH: 'Energy', JPM: 'Financials',
 }
 
-export default function Leaderboard({ navigate }) {
+export default function Leaderboard() {
   const [sideFilter, setSideFilter] = useState('all')
   const [periodFilter, setPeriodFilter] = useState('all')
   const [sectorFilter, setSectorFilter] = useState('All Sectors')
@@ -100,7 +100,7 @@ export default function Leaderboard({ navigate }) {
                 const displayedRank = index + 1
                 const isTop3 = displayedRank <= 3
                 return (
-                  <tr key={u.rank} className="lb-row border-b last:border-b-0 cursor-pointer" style={{ borderColor: 'var(--border)', ...(u.isYou ? { background: 'var(--bg-warm)' } : {}) }} onClick={() => navigate('profile')}>
+                  <tr key={u.userId} className="lb-row border-b last:border-b-0" style={{ borderColor: 'var(--border)', ...(u.isYou ? { background: 'var(--bg-warm)' } : {}) }}>
                     <td className="px-4 py-3.5">
                       {isTop3
                         ? <span className="font-serif text-lg font-medium">{displayedRank}</span>

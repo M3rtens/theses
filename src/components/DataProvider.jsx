@@ -1,6 +1,7 @@
 'use client'
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
+import { useUser } from './UserProvider.jsx'
 
 // Single client-side cache for every shared dataset in the app. It loads all
 // data once when the app boots and holds it above the view switch, so navigating
@@ -42,6 +43,8 @@ function toLiveMap(rows, theses) {
 }
 
 export default function DataProvider({ children }) {
+  const user = useUser()
+  const userId = user?.id
   const [stored, setStored] = useState([])
   const [leaderboard, setLeaderboard] = useState([])
   const [discover, setDiscover] = useState([])
@@ -55,6 +58,12 @@ export default function DataProvider({ children }) {
 
   // The user's own stored theses, with trigger statuses recomputed server-side.
   const loadStored = useCallback(async () => {
+    if (!userId) {
+      setStored([])
+      setLoading((l) => ({ ...l, stored: false }))
+      return
+    }
+
     try {
       const r = await fetch('/api/theses/evaluate', { method: 'POST' })
       const rows = r.ok ? await r.json() : []
@@ -64,7 +73,7 @@ export default function DataProvider({ children }) {
     } finally {
       setLoading((l) => ({ ...l, stored: false }))
     }
-  }, [])
+  }, [userId])
 
   const loadLeaderboard = useCallback(async () => {
     try {

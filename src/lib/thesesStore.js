@@ -1,5 +1,5 @@
 import 'server-only'
-import { createClient } from './supabase/server'
+import { requireUserContext } from './auth.js'
 
 // Postgres-backed store for user-created theses, scoped to the signed-in user
 // via Supabase Row Level Security. Each thesis object is stored whole in the
@@ -9,23 +9,18 @@ import { createClient } from './supabase/server'
 // Resolve the request's Supabase client and current user. Throws if there is no
 // session — every caller runs inside an authenticated API route.
 async function ctx() {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) throw new Error('not authenticated')
-  return { supabase, user }
+  return requireUserContext()
 }
 
 // Fold the row id into the stored thesis object.
-const hydrate = (row) => ({ ...row.data, id: row.id })
+const hydrate = (row) => ({ ...row.data, id: row.id, ownerId: row.user_id })
 
 // Newest first.
 export async function listTheses() {
   const { supabase, user } = await ctx()
   const { data, error } = await supabase
     .from('theses')
-    .select('id, data')
+    .select('id, user_id, data')
     .eq('user_id', user.id)
     .order('created_at', { ascending: false })
     .order('id', { ascending: false })
@@ -37,7 +32,7 @@ export async function getThesis(id) {
   const { supabase, user } = await ctx()
   const { data, error } = await supabase
     .from('theses')
-    .select('id, data')
+    .select('id, user_id, data')
     .eq('user_id', user.id)
     .eq('id', id)
     .maybeSingle()
@@ -52,7 +47,7 @@ export async function addThesis(thesis) {
   const { data, error } = await supabase
     .from('theses')
     .insert({ user_id: user.id, data: thesis, status: thesis.status || 'active' })
-    .select('id, data')
+    .select('id, user_id, data')
     .single()
   if (error) throw error
   return hydrate(data)
@@ -78,7 +73,7 @@ export async function updateThesis(id, patch) {
     .update({ data: updated, status: updated.status || 'active' })
     .eq('user_id', user.id)
     .eq('id', id)
-    .select('id, data')
+    .select('id, user_id, data')
     .single()
   if (error) throw error
   return hydrate(data)
