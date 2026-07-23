@@ -64,47 +64,47 @@ export default function Dashboard({ navigate }) {
 
   return (
     <>
-      <header className="px-12 pt-8 pb-6 flex items-end justify-between border-b" style={{ borderColor: 'var(--border)' }}>
+      <header className="px-4 pt-6 pb-5 sm:px-6 sm:pt-8 sm:pb-6 lg:px-12 flex items-end justify-between border-b" style={{ borderColor: 'var(--border)' }}>
         <div>
-          <h1 className="font-serif text-3xl font-medium tracking-tight">{greeting}{user?.firstName ? `, ${user.firstName}` : ''}.</h1>
+          <h1 className="font-serif text-2xl sm:text-3xl font-medium tracking-tight">{greeting}{user?.firstName ? `, ${user.firstName}` : ''}.</h1>
           <p className="text-sm mt-1" style={{ color: 'var(--ink-soft)' }}>You have <span style={{ color: alerts.length ? 'var(--bear)' : 'var(--ink-soft)', fontWeight: 500 }}>{alerts.length} trigger alert{alerts.length === 1 ? '' : 's'}</span> and <span style={{ fontWeight: 500 }}>1 draft</span> awaiting review.</p>
         </div>
       </header>
 
-      <div className="px-12 py-8">
-        <div className="grid grid-cols-4 gap-px mb-10" style={{ background: 'var(--border)' }}>
-          <div className="p-5" style={{ background: 'var(--bg)' }}>
+      <div className="px-4 py-6 sm:px-6 sm:py-8 lg:px-12">
+        <div className="grid grid-cols-2 xl:grid-cols-4 gap-px mb-8 sm:mb-10" style={{ background: 'var(--border)' }}>
+          <div className="p-4 sm:p-5" style={{ background: 'var(--bg)' }}>
             <div className="text-[10px] font-mono uppercase tracking-wider mb-2" style={{ color: 'var(--muted)' }}>Active Theses</div>
-            <div className="flex items-baseline gap-2">
-              <span className="font-serif text-4xl font-medium">{active.length}</span>
+            <div className="flex flex-col sm:flex-row sm:items-baseline gap-1 sm:gap-2">
+              <span className="font-serif text-3xl sm:text-4xl font-medium">{active.length}</span>
               <span className="text-xs num-mono" style={{ color: 'var(--ink-soft)' }}>of {allTheses.length} published</span>
             </div>
           </div>
-          <div className="p-5" style={{ background: 'var(--bg)' }}>
+          <div className="p-4 sm:p-5" style={{ background: 'var(--bg)' }}>
             <div className="text-[10px] font-mono uppercase tracking-wider mb-2" style={{ color: 'var(--muted)' }}>Avg. Return</div>
-            <div className="flex items-baseline gap-2">
-              <span className={`font-serif text-4xl font-medium ${avgClass}`}>{avgReturn >= 0 ? '+' : '−'}{Math.abs(avgReturn).toFixed(1)}%</span>
+            <div className="flex flex-col sm:flex-row sm:items-baseline gap-1 sm:gap-2">
+              <span className={`font-serif text-3xl sm:text-4xl font-medium ${avgClass}`}>{avgReturn >= 0 ? '+' : '−'}{Math.abs(avgReturn).toFixed(1)}%</span>
               <span className="text-xs num-mono" style={{ color: 'var(--ink-soft)' }}>across {returns.length} theses</span>
             </div>
           </div>
-          <div className="p-5" style={{ background: 'var(--bg)' }}>
+          <div className="p-4 sm:p-5" style={{ background: 'var(--bg)' }}>
             <div className="text-[10px] font-mono uppercase tracking-wider mb-2" style={{ color: 'var(--muted)' }}>Win Rate</div>
-            <div className="flex items-baseline gap-2">
-              <span className="font-serif text-4xl font-medium">{winRate == null ? '—' : `${winRate}%`}</span>
+            <div className="flex flex-col sm:flex-row sm:items-baseline gap-1 sm:gap-2">
+              <span className="font-serif text-3xl sm:text-4xl font-medium">{winRate == null ? '—' : `${winRate}%`}</span>
               <span className="text-xs num-mono" style={{ color: 'var(--ink-soft)' }}>{winRate == null ? 'no closed theses' : `${wins} of ${closed.length} closed`}</span>
             </div>
           </div>
-          <div className="p-5" style={{ background: 'var(--bg)' }}>
+          <div className="p-4 sm:p-5" style={{ background: 'var(--bg)' }}>
             <div className="text-[10px] font-mono uppercase tracking-wider mb-2" style={{ color: 'var(--muted)' }}>Leaderboard Rank</div>
-            <div className="flex items-baseline gap-2">
-              <span className="font-serif text-4xl font-medium">{me ? `#${me.rank}` : '—'}</span>
+            <div className="flex flex-col sm:flex-row sm:items-baseline gap-1 sm:gap-2">
+              <span className="font-serif text-3xl sm:text-4xl font-medium">{me ? `#${me.rank}` : '—'}</span>
               <span className="text-xs num-mono" style={{ color: 'var(--ink-soft)' }}>of {board.length}</span>
             </div>
           </div>
         </div>
 
-        <div className="grid grid-cols-3 gap-8">
-          <div className="col-span-2">
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
+          <div className="xl:col-span-2">
             <div className="flex items-baseline justify-between mb-4">
               <h2 className="font-serif text-xl font-medium">Active Theses</h2>
               <button onClick={() => navigate('mytheses')} className="text-xs font-mono uppercase tracking-wider" style={{ color: 'var(--muted)', background: 'transparent', border: 'none', cursor: 'pointer' }}>View all →</button>

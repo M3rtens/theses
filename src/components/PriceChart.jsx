@@ -175,5 +175,5 @@ export default function PriceChart({ history, benchmark, entry, currency, publis
     return () => chart.remove()
   }, [history, benchmark, entry, currency, publishTime])
 
-  return <div ref={containerRef} className="relative" style={{ height: 320, width: '100%' }} />
+  return <div ref={containerRef} className="price-chart-container relative" />
 }

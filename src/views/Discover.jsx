@@ -49,22 +49,22 @@ export default function Discover({ navigate }) {
 
   return (
     <>
-      <header className="px-12 pt-8 pb-6 border-b" style={{ borderColor: 'var(--border)' }}>
-        <div className="flex items-end justify-between">
+      <header className="px-4 pt-6 pb-5 sm:px-6 sm:pt-8 sm:pb-6 lg:px-12 border-b" style={{ borderColor: 'var(--border)' }}>
+        <div className="flex flex-col items-stretch gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <div className="text-[10px] font-mono uppercase tracking-wider mb-1" style={{ color: 'var(--muted)' }}>Community Feed</div>
             <h1 className="font-serif text-3xl font-medium tracking-tight">Discover</h1>
             <p className="text-sm mt-1" style={{ color: 'var(--ink-soft)' }}>Recent theses published by the community. Performance is tracked from publish time.</p>
           </div>
-          <div className="flex items-center gap-1 p-1 border rounded-md" style={{ borderColor: 'var(--border)', background: 'white' }}>
-            <button type="button" aria-pressed={sort === 'trending'} onClick={() => setSort('trending')} className={`lb-filter text-xs px-3 py-1 rounded ${sort === 'trending' ? 'active' : ''}`}>Trending</button>
-            <button type="button" aria-pressed={sort === 'newest'} onClick={() => setSort('newest')} className={`lb-filter text-xs px-3 py-1 rounded ${sort === 'newest' ? 'active' : ''}`}>Newest</button>
-            <button type="button" aria-pressed={sort === 'top'} onClick={() => setSort('top')} className={`lb-filter text-xs px-3 py-1 rounded ${sort === 'top' ? 'active' : ''}`}>Top Performers</button>
+          <div className="flex items-center gap-1 p-1 border rounded-md overflow-x-auto" style={{ borderColor: 'var(--border)', background: 'white' }}>
+            <button type="button" aria-pressed={sort === 'trending'} onClick={() => setSort('trending')} className={`lb-filter whitespace-nowrap text-xs px-3 py-1 rounded ${sort === 'trending' ? 'active' : ''}`}>Trending</button>
+            <button type="button" aria-pressed={sort === 'newest'} onClick={() => setSort('newest')} className={`lb-filter whitespace-nowrap text-xs px-3 py-1 rounded ${sort === 'newest' ? 'active' : ''}`}>Newest</button>
+            <button type="button" aria-pressed={sort === 'top'} onClick={() => setSort('top')} className={`lb-filter whitespace-nowrap text-xs px-3 py-1 rounded ${sort === 'top' ? 'active' : ''}`}>Top Performers</button>
           </div>
         </div>
 
         <div className="flex items-center flex-wrap gap-3 mt-6">
-          <div className="relative flex-1 min-w-64 max-w-md">
+          <div className="relative w-full flex-1 min-w-0 sm:min-w-64 sm:max-w-md">
             <i className="icon-search text-sm absolute left-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--muted)' }}></i>
             <input
               type="search"
@@ -79,7 +79,7 @@ export default function Discover({ navigate }) {
             value={sector}
             onChange={(e) => setSector(e.target.value)}
             aria-label="Filter by security type"
-            className="text-sm px-3 py-2 border rounded-md"
+            className="w-full sm:w-auto text-sm px-3 py-2 border rounded-md"
             style={{ borderColor: 'var(--border)', background: 'white', color: 'var(--ink)' }}
           >
             <option value="all">All securities</option>
@@ -87,18 +87,18 @@ export default function Discover({ navigate }) {
               <option key={s} value={s}>{s}</option>
             ))}
           </select>
-          <span className="text-xs font-mono ml-auto" style={{ color: 'var(--muted)' }}>{results.length} of {feed.length}</span>
+          <span className="text-xs font-mono sm:ml-auto" style={{ color: 'var(--muted)' }}>{results.length} of {feed.length}</span>
         </div>
       </header>
 
-      <div className="px-12 py-8">
+      <div className="px-4 py-6 sm:px-6 sm:py-8 lg:px-12">
         {results.length === 0 && (
           <div className="p-6 border rounded-md text-center" style={{ borderColor: 'var(--border)', background: 'var(--bg)' }}>
             <div className="font-serif text-lg font-medium">No theses match</div>
             <p className="text-xs mt-1" style={{ color: 'var(--muted)' }}>Try a different title search or security type.</p>
           </div>
         )}
-        <div className="grid grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
           {results.map((t, i) => {
             const retClass = t.ret >= 0 ? 'ret-pos' : 'ret-neg'
             const sign = t.ret >= 0 ? '+' : '−'
@@ -106,7 +106,7 @@ export default function Discover({ navigate }) {
             const sideLabel = t.side === 'bull' ? 'BULL' : 'BEAR'
             const initials = t.author.split(' ').map(n => n[0]).join('')
             return (
-              <div key={t.id ?? i} className="thesis-card rounded-md p-6 cursor-pointer flex flex-col" onClick={() => navigate('thesis', t)}>
+              <div key={t.id ?? i} className="thesis-card rounded-md p-4 sm:p-6 cursor-pointer flex flex-col" onClick={() => navigate('thesis', t)}>
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-2.5">
                     <div className="w-8 h-8 rounded-full flex items-center justify-center font-mono text-[10px] font-semibold" style={{ background: 'var(--bg-warm)', color: 'var(--ink)', border: '1px solid var(--border)' }}>
@@ -120,7 +120,7 @@ export default function Discover({ navigate }) {
                   <span className={`${sideClass} text-[9px] font-mono font-semibold px-1.5 py-0.5 rounded`}>{sideLabel}</span>
                 </div>
 
-                <div className="flex items-center gap-2 mb-2">
+                <div className="flex flex-wrap items-center gap-2 mb-2">
                   <span className="font-mono text-sm font-semibold">{t.ticker}</span>
                   {t.sector && <span className="text-[9px] font-mono px-1.5 py-0.5 rounded" style={{ background: 'var(--bg-warm)', color: 'var(--muted)', border: '1px solid var(--border)' }}>{t.sector}</span>}
                   <span className="text-[10px] font-mono" style={{ color: 'var(--muted)' }}>·</span>

@@ -114,12 +114,12 @@ export default function Profile({ navigate }) {
 
   return (
     <>
-      <header className="px-12 pt-8 pb-8 border-b" style={{ borderColor: 'var(--border)' }}>
-        <div className="flex items-start gap-6">
-          <div className="w-20 h-20 rounded-full flex items-center justify-center font-mono text-2xl font-semibold shrink-0" style={{ background: 'var(--ink)', color: 'white' }}>{me?.avatar || '—'}</div>
+      <header className="px-4 pt-6 pb-6 sm:px-6 sm:pt-8 sm:pb-8 lg:px-12 border-b" style={{ borderColor: 'var(--border)' }}>
+        <div className="flex flex-col items-start gap-5 sm:flex-row sm:gap-6">
+          <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full flex items-center justify-center font-mono text-xl sm:text-2xl font-semibold shrink-0" style={{ background: 'var(--ink)', color: 'white' }}>{me?.avatar || '—'}</div>
           <div className="flex-1">
-            <div className="flex items-center gap-3 mb-1">
-              <h1 className="font-serif text-3xl font-medium tracking-tight">{me?.name || 'You'}</h1>
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-1">
+              <h1 className="font-serif text-2xl sm:text-3xl font-medium tracking-tight">{me?.name || 'You'}</h1>
               <span className="seal"><i className="icon-badge-check text-[11px]"></i> Verified Analyst</span>
             </div>
             <div className="text-sm font-mono" style={{ color: 'var(--muted)' }}>{me?.handle || ''} · Joined Jan 2022</div>
@@ -154,12 +154,12 @@ export default function Profile({ navigate }) {
               </div>
             )}
           </div>
-          <div className="text-right shrink-0">
+          <div className="w-full sm:w-auto sm:text-right shrink-0">
             <div className="text-[10px] font-mono uppercase tracking-wider" style={{ color: 'var(--muted)' }}>Global Rank</div>
             <div className="font-serif text-4xl font-medium">{myRank ? `#${myRank}` : '—'}</div>
             <div className="text-xs font-mono" style={{ color: 'var(--ink-soft)' }}>of {board.length} analyst{board.length === 1 ? '' : 's'}</div>
             {editing === null && (
-              <div className="mt-3 flex flex-col items-end gap-2">
+              <div className="mt-3 flex flex-row flex-wrap sm:flex-col sm:items-end gap-2">
                 <button
                   type="button"
                   onClick={openEditor}
@@ -181,7 +181,7 @@ export default function Profile({ navigate }) {
           </div>
         </div>
 
-        <div className="grid grid-cols-5 gap-px mt-8" style={{ background: 'var(--border)' }}>
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-px mt-8" style={{ background: 'var(--border)' }}>
           <div className="p-4" style={{ background: 'var(--bg)' }}>
             <div className="text-[10px] font-mono uppercase tracking-wider mb-1" style={{ color: 'var(--muted)' }}>Win Rate</div>
             <div className="font-serif text-3xl font-medium">{me ? `${me.winRate}%` : '—'}</div>
@@ -210,10 +210,10 @@ export default function Profile({ navigate }) {
         </div>
       </header>
 
-      <div className="px-12 py-8">
-        <div className="grid grid-cols-3 gap-8">
-          <div className="col-span-2">
-            <div className="flex items-baseline justify-between mb-5">
+      <div className="px-4 py-6 sm:px-6 sm:py-8 lg:px-12">
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
+          <div className="xl:col-span-2">
+            <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-baseline sm:justify-between mb-5">
               <h2 className="font-serif text-xl font-medium">Published Theses</h2>
               <div className="flex items-center gap-1 p-1 border rounded" style={{ borderColor: 'var(--border)', background: 'white' }}>
                 {THESIS_FILTERS.map((f) => (

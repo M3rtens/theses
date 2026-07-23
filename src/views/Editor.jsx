@@ -474,7 +474,7 @@ export default function Editor({ draft = null, navigate, showToast, onOpenPublis
 
   return (
     <div onDragEnter={onDragEnter} onDragLeave={onDragLeave} onDragOver={(e) => e.preventDefault()} onDrop={onDrop}>
-      <header className="px-12 pt-8 pb-5 border-b flex items-center justify-between" style={{ borderColor: 'var(--border)' }}>
+      <header className="px-4 pt-5 pb-5 sm:px-6 sm:pt-8 lg:px-12 border-b flex flex-col items-stretch gap-4 sm:flex-row sm:items-center sm:justify-between" style={{ borderColor: 'var(--border)' }}>
         <div className="flex items-center gap-4">
           <button onClick={() => navigate('dashboard')} className="toolbar-btn"><i className="icon-arrow-left"></i></button>
           <div>
@@ -483,24 +483,24 @@ export default function Editor({ draft = null, navigate, showToast, onOpenPublis
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={saveDraft} className="btn-secondary text-sm px-4 py-2 rounded-md">Save Draft</button>
-          <button onClick={openPublish} className="btn-primary text-sm px-4 py-2 rounded-md flex items-center gap-2">
+          <button onClick={saveDraft} className="btn-secondary flex-1 sm:flex-none text-sm px-4 py-2 rounded-md">Save Draft</button>
+          <button onClick={openPublish} className="btn-primary flex-1 sm:flex-none justify-center text-sm px-4 py-2 rounded-md flex items-center gap-2">
             <i className="icon-lock text-xs"></i> Publish &amp; Lock
           </button>
         </div>
       </header>
 
-      <div className="px-12 py-8 max-w-4xl">
+      <div className="px-4 py-6 sm:px-6 sm:py-8 lg:px-12 max-w-4xl">
         <input
           ref={titleRef}
           type="text"
           placeholder="Give your thesis a clear, declarative title…"
-          className="input-clean font-serif text-4xl font-medium placeholder:text-[color:var(--faint)] mb-2"
+          className="input-clean font-serif text-3xl sm:text-4xl font-medium placeholder:text-[color:var(--faint)] mb-2"
           defaultValue={draft?.title || ''}
         />
 
         <div className="flex flex-wrap items-center gap-3 mb-6 pb-6 border-b" style={{ borderColor: 'var(--border)' }}>
-          <div className="flex items-center gap-2">
+          <div className="flex w-full items-center gap-2 sm:w-auto">
             <span className="text-[10px] font-mono uppercase tracking-wider" style={{ color: 'var(--muted)' }}>Security</span>
             <SecuritySearch value={security} onSelect={setSecurity} />
           </div>
@@ -515,10 +515,10 @@ export default function Editor({ draft = null, navigate, showToast, onOpenPublis
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-6 mb-8">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
           <div>
             <div className="text-[10px] font-mono uppercase tracking-wider mb-2" style={{ color: 'var(--muted)' }}>Position Declaration</div>
-            <div className="flex gap-2">
+            <div className="flex flex-col sm:flex-row gap-2">
               <button onClick={() => setSide('bull')} className="flex-1 py-3 px-4 border-2 rounded-md text-left transition-all" style={{ ...sideBox(side === 'bull', 'bull'), cursor: 'pointer' }}>
                 <div className="flex items-center justify-between">
                   <div>
@@ -651,7 +651,7 @@ export default function Editor({ draft = null, navigate, showToast, onOpenPublis
         </div>
 
         <div className="mb-8">
-          <div className="flex items-center justify-between gap-4 mb-3">
+          <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4 mb-3">
             <div>
               <h3 className="font-serif text-lg font-medium">Invalidation Triggers</h3>
               <p className="text-xs mt-0.5" style={{ color: 'var(--ink-soft)' }}>Tie each condition to a reported financial line item. The app tracks it against the security&rsquo;s filings and flags the thesis when the condition holds.</p>
@@ -700,7 +700,7 @@ export default function Editor({ draft = null, navigate, showToast, onOpenPublis
           )}
         </div>
 
-        <div className="border-b mb-6 flex items-center gap-1" style={{ borderColor: 'var(--border)' }}>
+        <div className="border-b mb-6 flex items-center gap-1 overflow-x-auto" style={{ borderColor: 'var(--border)' }}>
           {['thesis', 'model', 'financials', 'charts'].map(tab => (
             <button key={tab} className={`tab-btn ${activeTab === tab ? 'active' : ''}`} onClick={() => setActiveTab(tab)}>
               {tab.charAt(0).toUpperCase() + tab.slice(1)}
@@ -709,7 +709,7 @@ export default function Editor({ draft = null, navigate, showToast, onOpenPublis
         </div>
 
         <div className={tabHidden('thesis')}>
-          <div className="sticky top-0 z-20 flex items-center gap-0.5 py-2 mb-3 border-b bg-white" style={{ borderColor: 'var(--border)' }}>
+          <div className="sticky top-[57px] md:top-0 z-20 flex items-center gap-0.5 py-2 mb-3 border-b bg-white overflow-x-auto" style={{ borderColor: 'var(--border)' }}>
             <button className="toolbar-btn" onClick={() => format('bold')} title="Bold"><i className="icon-bold"></i></button>
             <button className="toolbar-btn" onClick={() => format('italic')} title="Italic"><i className="icon-italic"></i></button>
             <button className="toolbar-btn" onClick={() => format('underline')} title="Underline"><i className="icon-underline"></i></button>
@@ -726,7 +726,7 @@ export default function Editor({ draft = null, navigate, showToast, onOpenPublis
             <button className="toolbar-btn" onClick={() => format('createLink')} title="Link"><i className="icon-link"></i></button>
             <button className="toolbar-btn" onClick={insertDivider} title="Divider"><i className="icon-minus"></i></button>
             <button className="toolbar-btn" onClick={insertEmbed} title="Embed"><i className="icon-chart-no-axes-column"></i></button>
-            <button type="button" className="editor-command-hint ml-auto" onClick={openSlashCommands}>
+            <button type="button" className="editor-command-hint hidden sm:block ml-auto" onClick={openSlashCommands}>
               Type <kbd>/</kbd> for commands
             </button>
           </div>

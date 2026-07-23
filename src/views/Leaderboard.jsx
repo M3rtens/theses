@@ -48,8 +48,8 @@ export default function Leaderboard() {
 
   return (
     <>
-      <header className="px-12 pt-8 pb-6 border-b" style={{ borderColor: 'var(--border)' }}>
-        <div className="flex items-baseline justify-between">
+      <header className="px-4 pt-6 pb-5 sm:px-6 sm:pt-8 sm:pb-6 lg:px-12 border-b" style={{ borderColor: 'var(--border)' }}>
+        <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-baseline sm:justify-between">
           <div>
             <div className="text-[10px] font-mono uppercase tracking-wider mb-1" style={{ color: 'var(--muted)' }}>Integrity-Protected Rankings</div>
             <h1 className="font-serif text-3xl font-medium tracking-tight">Leaderboard</h1>
@@ -59,28 +59,28 @@ export default function Leaderboard() {
         </div>
 
         <div className="flex items-center flex-wrap gap-2 mt-6">
-          <div className="flex items-center gap-1 p-1 border rounded-md" style={{ borderColor: 'var(--border)', background: 'white' }}>
+          <div className="flex max-w-full items-center gap-1 p-1 border rounded-md overflow-x-auto" style={{ borderColor: 'var(--border)', background: 'white' }}>
             {SIDE_FILTERS.map((filter) => (
               <button key={filter.value} type="button" aria-pressed={sideFilter === filter.value} onClick={() => setSideFilter(filter.value)} className={filterClass(sideFilter === filter.value)}>{filter.label}</button>
             ))}
           </div>
-          <div className="flex items-center gap-1 p-1 border rounded-md" style={{ borderColor: 'var(--border)', background: 'white' }}>
+          <div className="flex max-w-full items-center gap-1 p-1 border rounded-md overflow-x-auto" style={{ borderColor: 'var(--border)', background: 'white' }}>
             {PERIOD_FILTERS.map((filter) => (
               <button key={filter.value} type="button" aria-pressed={periodFilter === filter.value} onClick={() => setPeriodFilter(filter.value)} className={filterClass(periodFilter === filter.value)}>{filter.label}</button>
             ))}
           </div>
-          <div className="flex items-center flex-wrap gap-1 p-1 border rounded-md" style={{ borderColor: 'var(--border)', background: 'white' }}>
+          <div className="flex max-w-full items-center gap-1 p-1 border rounded-md overflow-x-auto" style={{ borderColor: 'var(--border)', background: 'white' }}>
             {SECTOR_FILTERS.map((sector) => (
               <button key={sector} type="button" aria-pressed={sectorFilter === sector} onClick={() => setSectorFilter(sector)} className={filterClass(sectorFilter === sector)}>{sector}</button>
             ))}
           </div>
-          <div className="ml-auto text-xs font-mono" style={{ color: 'var(--muted)' }}>{filteredData.length} displayed · {board.length} analyst{board.length === 1 ? '' : 's'}</div>
+          <div className="w-full sm:w-auto sm:ml-auto text-xs font-mono" style={{ color: 'var(--muted)' }}>{filteredData.length} displayed · {board.length} analyst{board.length === 1 ? '' : 's'}</div>
         </div>
       </header>
 
-      <div className="px-12 py-6">
-        <div className="border rounded-md overflow-hidden" style={{ borderColor: 'var(--border)', background: 'white' }}>
-          <table className="w-full">
+      <div className="px-4 py-6 sm:px-6 lg:px-12">
+        <div className="border rounded-md overflow-x-auto" style={{ borderColor: 'var(--border)', background: 'white' }}>
+          <table className="w-full min-w-[850px]">
             <thead>
               <tr className="border-b" style={{ borderColor: 'var(--border)', background: 'var(--bg-warm)' }}>
                 <th className="text-left text-[10px] font-mono uppercase tracking-wider px-4 py-3" style={{ color: 'var(--muted)' }}>Rank</th>
@@ -138,7 +138,7 @@ export default function Leaderboard() {
           </table>
         </div>
 
-        <div className="flex items-center justify-between mt-6 text-xs" style={{ color: 'var(--muted)' }}>
+        <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between mt-6 text-xs" style={{ color: 'var(--muted)' }}>
           <span>{filteredData.length ? `Showing 1–${filteredData.length} of ${filteredData.length} matching analysts` : 'Showing 0 matching analysts'}</span>
           <div className="leaderboard-pagination flex items-center gap-2">
             <button type="button" disabled className="px-2 py-1 border rounded" style={{ borderColor: 'var(--border)' }}>Previous</button>

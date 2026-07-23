@@ -29,8 +29,8 @@ export default function MyTheses({ navigate }) {
   const filterClass = (on) => `lb-filter text-xs px-3 py-1 rounded ${on ? 'active' : ''}`
   return (
     <>
-      <header className="px-12 pt-8 pb-6 border-b" style={{ borderColor: 'var(--border)' }}>
-        <div className="flex items-end justify-between">
+      <header className="px-4 pt-6 pb-5 sm:px-6 sm:pt-8 sm:pb-6 lg:px-12 border-b" style={{ borderColor: 'var(--border)' }}>
+        <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <div className="text-[10px] font-mono uppercase tracking-wider mb-1" style={{ color: 'var(--muted)' }}>Workspace</div>
             <h1 className="font-serif text-3xl font-medium tracking-tight">My Theses</h1>
@@ -41,13 +41,13 @@ export default function MyTheses({ navigate }) {
           </button>
         </div>
 
-        <div className="flex items-center gap-2 mt-6">
-          <div className="flex items-center gap-1 p-1 border rounded-md" style={{ borderColor: 'var(--border)', background: 'white' }}>
+        <div className="flex items-center gap-2 mt-6 overflow-x-auto pb-1">
+          <div className="flex shrink-0 items-center gap-1 p-1 border rounded-md" style={{ borderColor: 'var(--border)', background: 'white' }}>
             <button onClick={() => setStatus('all')} className={filterClass(status === 'all')}>All ({counts.all})</button>
             <button onClick={() => setStatus('active')} className={filterClass(status === 'active')}>Active ({counts.active})</button>
             <button onClick={() => setStatus('closed')} className={filterClass(status === 'closed')}>Closed ({counts.closed})</button>
           </div>
-          <div className="flex items-center gap-1 p-1 border rounded-md" style={{ borderColor: 'var(--border)', background: 'white' }}>
+          <div className="flex shrink-0 items-center gap-1 p-1 border rounded-md" style={{ borderColor: 'var(--border)', background: 'white' }}>
             <button onClick={() => setSide('all')} className={filterClass(side === 'all')}>All Sides</button>
             <button onClick={() => setSide('bull')} className={filterClass(side === 'bull')}>Long</button>
             <button onClick={() => setSide('bear')} className={filterClass(side === 'bear')}>Short</button>
@@ -55,9 +55,9 @@ export default function MyTheses({ navigate }) {
         </div>
       </header>
 
-      <div className="px-12 py-8">
-        <div className="border rounded-md overflow-hidden" style={{ borderColor: 'var(--border)', background: 'white' }}>
-          <table className="w-full">
+      <div className="px-4 py-6 sm:px-6 sm:py-8 lg:px-12">
+        <div className="border rounded-md overflow-x-auto" style={{ borderColor: 'var(--border)', background: 'white' }}>
+          <table className="w-full min-w-[980px]">
             <thead>
               <tr className="border-b" style={{ borderColor: 'var(--border)', background: 'var(--bg-warm)' }}>
                 <th className="text-left text-[10px] font-mono uppercase tracking-wider px-4 py-3" style={{ color: 'var(--muted)' }}>Ticker</th>

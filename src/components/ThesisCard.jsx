@@ -29,8 +29,8 @@ export default function ThesisCard({ thesis: t, variant = 'dashboard', onOpen, l
 
   return (
     <div className="thesis-card rounded-md p-4 cursor-pointer" onClick={onOpen}>
-      <div className="flex items-center gap-4">
-        <div className="flex-shrink-0 w-20">
+      <div className="flex items-center gap-3 sm:gap-4">
+        <div className="flex-shrink-0 w-14 sm:w-20">
           <div className="font-mono text-sm font-semibold">{t.ticker}</div>
           <div className="text-[10px] font-mono mt-0.5" style={{ color: 'var(--muted)' }}>{t.daysActive}d</div>
         </div>
@@ -45,11 +45,11 @@ export default function ThesisCard({ thesis: t, variant = 'dashboard', onOpen, l
             <div className="text-[11px] font-mono mt-0.5" style={{ color: 'var(--muted)' }}>Published {t.publishDate} · {t.updates} updates</div>
           )}
         </div>
-        <div className="flex-shrink-0">
+        <div className="hidden lg:block flex-shrink-0">
           <Sparkline thesis={t} />
         </div>
-        <div className="flex-shrink-0 text-right w-24">
-          <div className={`font-mono text-lg font-semibold ${retClass}`}>{sign}{Math.abs(ret).toFixed(1)}%</div>
+        <div className="flex-shrink-0 text-right w-20 sm:w-24">
+          <div className={`font-mono text-base sm:text-lg font-semibold ${retClass}`}>{sign}{Math.abs(ret).toFixed(1)}%</div>
           <div className="text-[10px] font-mono" style={{ color: 'var(--muted)' }}>{fmtPrice(entry, currency)} → {fmtPrice(current, currency)}</div>
         </div>
       </div>

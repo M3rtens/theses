@@ -30,8 +30,8 @@ export default function Triggers({ navigate }) {
         </div>
         <div className="space-y-3">
           {items.map((item, i) => (
-            <div key={i} className="p-4 border rounded-md flex items-center gap-4" style={{ borderColor: `var(${colorVar})`, background: `var(${softVar})` }}>
-              <div className="w-24 shrink-0">
+            <div key={i} className="p-4 border rounded-md flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:gap-4" style={{ borderColor: `var(${colorVar})`, background: `var(${softVar})` }}>
+              <div className="w-full sm:w-24 shrink-0">
                 <div className="font-mono text-sm font-semibold">{item.thesis.ticker}</div>
                 <div className="text-[10px] font-mono" style={{ color: 'var(--muted)' }}>{item.thesis.sector}</div>
               </div>
@@ -39,7 +39,7 @@ export default function Triggers({ navigate }) {
                 <div className="text-sm font-medium">{item.c}</div>
                 <div className="text-xs mt-1" style={{ color: 'var(--ink-soft)' }}>From: &ldquo;{item.thesis.title}&rdquo;</div>
               </div>
-              <div className="text-right">
+              <div className="sm:text-right">
                 <div className="text-[10px] font-mono uppercase tracking-wider" style={{ color: `var(${colorVar})` }}>{item.s.toUpperCase()}</div>
               </div>
               <button onClick={() => navigate('thesis', item.thesis)} className="text-xs font-medium px-3 py-1.5 border rounded" style={{ borderColor: `var(${colorVar})`, color: `var(${colorVar})`, background: 'transparent', cursor: 'pointer' }}>Review</button>
@@ -52,14 +52,14 @@ export default function Triggers({ navigate }) {
 
   return (
     <>
-      <header className="px-12 pt-8 pb-6 border-b" style={{ borderColor: 'var(--border)' }}>
+      <header className="px-4 pt-6 pb-5 sm:px-6 sm:pt-8 sm:pb-6 lg:px-12 border-b" style={{ borderColor: 'var(--border)' }}>
         <div>
           <div className="text-[10px] font-mono uppercase tracking-wider mb-1" style={{ color: 'var(--muted)' }}>Automated Monitoring</div>
           <h1 className="font-serif text-3xl font-medium tracking-tight">Trigger Dashboard</h1>
           <p className="text-sm mt-1" style={{ color: 'var(--ink-soft)' }}>Financial triggers are re-evaluated against the latest filings each time this page loads.</p>
         </div>
 
-        <div className="grid grid-cols-3 gap-px mt-6" style={{ background: 'var(--border)' }}>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-px mt-6" style={{ background: 'var(--border)' }}>
           <div className="p-4" style={{ background: 'var(--bg)' }}>
             <div className="text-[10px] font-mono uppercase tracking-wider mb-1" style={{ color: 'var(--bear)' }}>Breached</div>
             <div className="font-serif text-3xl font-medium" style={{ color: 'var(--bear)' }}>{breached.length}</div>
@@ -78,7 +78,7 @@ export default function Triggers({ navigate }) {
         </div>
       </header>
 
-      <div className="px-12 py-8 space-y-8">
+      <div className="px-4 py-6 sm:px-6 sm:py-8 lg:px-12 space-y-8">
         {breached.length + warning.length + clear.length === 0 && (
           <p className="text-sm" style={{ color: 'var(--muted)' }}>No triggers defined across your active theses yet.</p>
         )}

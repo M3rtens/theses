@@ -71,6 +71,7 @@ export default function EmailPasswordForm() {
         <input
           type="text"
           required
+          autoComplete="name"
           placeholder="Full name"
           value={name}
           onChange={(e) => setName(e.target.value)}
@@ -80,6 +81,7 @@ export default function EmailPasswordForm() {
       <input
         type="email"
         required
+        autoComplete={mode === 'signup' ? 'email' : 'username'}
         placeholder="you@email.com"
         value={email}
         onChange={(e) => setEmail(e.target.value)}
@@ -89,6 +91,7 @@ export default function EmailPasswordForm() {
         type="password"
         required
         minLength={6}
+        autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
         placeholder="Password"
         value={password}
         onChange={(e) => setPassword(e.target.value)}

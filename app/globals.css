@@ -22,11 +22,16 @@
 
 html, body {
   margin: 0;
+  min-width: 320px;
   background: var(--bg);
   color: var(--ink);
   font-family: 'Inter', system-ui, sans-serif;
   font-feature-settings: 'ss01', 'cv11';
 }
+
+html { text-size-adjust: 100%; }
+button, input, select, textarea { font: inherit; }
+img, svg, canvas { max-width: 100%; }
 
 .font-serif { font-family: 'Fraunces', Georgia, serif; font-feature-settings: 'ss01'; }
 .font-mono { font-family: 'JetBrains Mono', ui-monospace, monospace; }
@@ -58,6 +63,83 @@ body::before {
   width: 2px;
   height: 16px;
   background: var(--ink);
+}
+
+.mobile-app-bar {
+  display: flex;
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  min-height: 57px;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--border);
+  background: rgb(250 250 247 / 96%);
+  padding: max(8px, env(safe-area-inset-top)) 14px 8px;
+  backdrop-filter: blur(12px);
+}
+.mobile-nav-icon {
+  display: inline-grid;
+  width: 40px;
+  height: 40px;
+  flex: 0 0 40px;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+}
+.mobile-nav-icon:hover, .mobile-nav-icon:focus-visible {
+  border-color: var(--border);
+  background: var(--surface);
+  outline: none;
+}
+.mobile-wordmark {
+  display: inline-flex;
+  align-items: baseline;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+}
+.mobile-nav-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  border: 0;
+  background: rgb(26 26 23 / 40%);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 180ms ease;
+}
+.mobile-nav-backdrop.open { opacity: 1; pointer-events: auto; }
+.mobile-nav-drawer {
+  position: fixed;
+  inset: 0 auto 0 0;
+  z-index: 70;
+  display: flex;
+  width: min(320px, 88vw);
+  max-width: 100%;
+  flex-direction: column;
+  border-right: 1px solid var(--border);
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+  box-shadow: 16px 0 40px rgb(26 26 23 / 14%);
+  transform: translateX(-102%);
+  visibility: hidden;
+  transition: transform 200ms ease, visibility 200ms step-end;
+}
+.mobile-nav-drawer.open {
+  transform: translateX(0);
+  visibility: visible;
+  transition: transform 200ms ease, visibility 0ms;
+}
+body.mobile-menu-open { overflow: hidden; }
+.mobile-nav-drawer .nav-item { min-height: 44px; padding-block: 10px; }
+
+@media (min-width: 768px) {
+  .mobile-app-bar, .mobile-nav-backdrop, .mobile-nav-drawer { display: none !important; }
 }
 
 .side-bull { color: var(--bull); background: var(--bull-soft); border: 1px solid rgba(45, 95, 63, 0.2); }
@@ -186,6 +268,7 @@ body::before {
 .price-chart .entry-line { stroke: var(--ink); stroke-width: 1; stroke-dasharray: 3 3; }
 .price-chart .price-line { fill: none; stroke-width: 1.75; stroke-linejoin: round; }
 .price-chart .price-area { opacity: 0.08; }
+.price-chart-container { width: 100%; height: 320px; }
 
 .drop-zone { border: 1.5px dashed var(--border-strong); transition: all 0.2s; }
 .drop-zone.dragging { border-color: var(--ink); background: var(--bg-warm); }
@@ -394,6 +477,41 @@ button.excel-formula-icon:hover, button.excel-formula-icon:focus-visible { backg
   .excel-ribbon-group { padding-inline: 5px; }
   .excel-ribbon-button { min-width: 34px; padding-inline: 4px; }
   .excel-status-bar { padding-inline: 8px; }
+  .excel-workbook-shell { width: 100%; max-width: 100%; }
+  .excel-titlebar { gap: 5px; padding-inline: 7px; }
+  .excel-app-mark { width: 25px; height: 25px; }
+  .excel-qat { display: none; }
+  .spreadsheet-file-name { min-width: 0; width: auto; flex: 1; padding-inline: 4px; text-overflow: ellipsis; }
+  .excel-ribbon-tabs { overflow-x: auto; padding-inline: 5px; }
+  .excel-ribbon-tabs button { flex: 0 0 auto; padding-inline: 10px; }
+  .excel-ribbon { overflow-x: auto; overscroll-behavior-x: contain; }
+  .excel-viewer-ribbon { overflow-x: auto; }
+  .excel-viewer-ribbon-group { flex: 0 0 auto; padding-inline: 10px; }
+  .excel-formula-row { grid-template-columns: 68px 34px minmax(0, 1fr); }
+  .excel-status-bar { border-left: 0; }
+  .spreadsheet-sheets { min-width: 150px; }
+  .spreadsheet-sheet-tab { min-width: 72px; padding-inline: 10px; }
+  .spreadsheet-find-input { width: min(150px, 48vw); }
+  .spreadsheet-fx-panel { width: calc(100vw - 24px); max-height: calc(100dvh - 24px); }
+}
+
+@media (max-width: 767px) {
+  .view { min-width: 0; }
+  .view h1, .view h2, .view h3, .view p { overflow-wrap: anywhere; }
+  .view button, .mobile-nav-drawer button, .mobile-app-bar button { touch-action: manipulation; }
+  .view select, .view input, .view textarea { max-width: 100%; }
+  .tab-btn { flex: 0 0 auto; white-space: nowrap; }
+  .editor-content { min-height: 320px; padding: 16px; font-size: 17px; }
+  .slash-menu { width: min(240px, calc(100vw - 24px)); }
+  .publication-date-control, .publication-date-trigger { width: 100%; }
+  .publication-date-trigger { min-width: 0; }
+  .publication-calendar { width: min(280px, calc(100vw - 32px)); }
+  .price-chart-container { height: 270px; }
+  .tooltip { max-width: calc(100vw - 24px); white-space: normal; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mobile-nav-backdrop, .mobile-nav-drawer, .view-enter, .thesis-card { animation: none; transition: none; }
 }
 
 @keyframes pulse-soft { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }

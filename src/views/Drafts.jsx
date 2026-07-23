@@ -30,8 +30,8 @@ export default function Drafts({ navigate }) {
 
   return (
     <>
-      <header className="px-12 pt-8 pb-6 border-b" style={{ borderColor: 'var(--border)' }}>
-        <div className="flex items-end justify-between">
+      <header className="px-4 pt-6 pb-5 sm:px-6 sm:pt-8 sm:pb-6 lg:px-12 border-b" style={{ borderColor: 'var(--border)' }}>
+        <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <div className="text-[10px] font-mono uppercase tracking-wider mb-1" style={{ color: 'var(--muted)' }}>Workspace</div>
             <h1 className="font-serif text-3xl font-medium tracking-tight">Drafts</h1>
@@ -50,11 +50,11 @@ export default function Drafts({ navigate }) {
         </div>
       </header>
 
-      <div className="px-12 py-8">
+      <div className="px-4 py-6 sm:px-6 sm:py-8 lg:px-12">
         {drafts.length === 0 && (
           <p className="text-sm" style={{ color: 'var(--muted)' }}>No drafts yet. Start one with “New Draft”.</p>
         )}
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {drafts.map(d => {
             const sideClass = d.side === 'bull' ? 'side-bull' : 'side-bear'
             const sideLabel = d.side === 'bull' ? 'BULL' : 'BEAR'

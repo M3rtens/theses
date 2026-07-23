@@ -273,16 +273,16 @@ export default function ThesisDetail({ navigate, thesis }) {
 
   return (
     <>
-      <header className="px-12 pt-6 pb-5 border-b" style={{ borderColor: 'var(--border)' }}>
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-3 text-sm">
+      <header className="px-4 pt-5 pb-5 sm:px-6 sm:pt-6 lg:px-12 border-b" style={{ borderColor: 'var(--border)' }}>
+        <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between mb-3">
+          <div className="flex min-w-0 items-center gap-2 sm:gap-3 text-sm overflow-x-auto max-w-full">
             <button onClick={() => navigate(user ? 'dashboard' : 'discover')} className="hover:underline" style={{ color: 'var(--ink-soft)', background: 'transparent', border: 'none', cursor: 'pointer' }}>{user ? 'Dashboard' : 'Discover'}</button>
             <span style={{ color: 'var(--faint)' }}>/</span>
             <span style={{ color: 'var(--ink-soft)' }}>{base.status === 'closed' ? 'Closed Theses' : 'Active Theses'}</span>
             <span style={{ color: 'var(--faint)' }}>/</span>
             <span className="font-mono">{base.ticker}</span>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {isClosed
               ? <span className="text-[10px] font-mono uppercase tracking-wider px-2 py-1 rounded" style={{ background: 'var(--bg-warm)', color: 'var(--ink-soft)' }}>Closed{closedInfo?.closedAt ? ` ${fmtStamp(closedInfo.closedAt)}` : ''}</span>
               : closeDate
@@ -292,17 +292,17 @@ export default function ThesisDetail({ navigate, thesis }) {
           </div>
         </div>
 
-        <div className="flex items-start justify-between gap-8">
+        <div className="flex flex-col items-start gap-5 lg:flex-row lg:justify-between lg:gap-8">
           <div className="flex-1">
-            <div className="flex items-center gap-3 mb-2">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-2">
               <span className="font-mono text-sm font-semibold">{base.ticker}</span>
               <span className="text-xs" style={{ color: 'var(--muted)' }}>{company}</span>
               <span className="text-xs" style={{ color: 'var(--muted)' }}>·</span>
               <span className="text-xs" style={{ color: 'var(--muted)' }}>{sector}</span>
               <span className={`${sideClass} text-[10px] font-mono font-semibold px-2 py-0.5 rounded`}>{sideLabel}</span>
             </div>
-            <h1 className="font-serif text-4xl font-medium tracking-tight leading-tight">{base.title}</h1>
-            <div className="flex items-center gap-4 mt-3 text-xs" style={{ color: 'var(--muted)' }}>
+            <h1 className="font-serif text-3xl sm:text-4xl font-medium tracking-tight leading-tight">{base.title}</h1>
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-3 text-xs" style={{ color: 'var(--muted)' }}>
               <span>By <span style={{ color: 'var(--ink)', fontWeight: 500 }}>{authorName}</span></span>
               <span>·</span>
               <span className="font-mono">Published {base.publishDate}</span>
@@ -312,9 +312,9 @@ export default function ThesisDetail({ navigate, thesis }) {
               <span className="font-mono">{base.daysActive ?? 0} days active</span>
             </div>
           </div>
-          <div className="text-right shrink-0">
+          <div className="text-left lg:text-right shrink-0">
             <div className="text-[10px] font-mono uppercase tracking-wider" style={{ color: 'var(--muted)' }}>Total Return</div>
-            <div className={`font-serif text-5xl font-medium ${retClass}`}>{retSign}{Math.abs(ret).toFixed(1)}%</div>
+            <div className={`font-serif text-4xl sm:text-5xl font-medium ${retClass}`}>{retSign}{Math.abs(ret).toFixed(1)}%</div>
             <div className="text-xs font-mono mt-1" style={{ color: 'var(--ink-soft)' }}>
               vs S&amp;P {spReturn == null ? '—' : `${spReturn >= 0 ? '+' : '−'}${Math.abs(spReturn).toFixed(1)}%`} · Alpha {alpha == null ? '—' : `${alpha >= 0 ? '+' : '−'}${Math.abs(alpha).toFixed(1)}pp`}
             </div>
@@ -322,15 +322,15 @@ export default function ThesisDetail({ navigate, thesis }) {
         </div>
       </header>
 
-      <div className="px-12 py-8">
-        <div className="grid grid-cols-4 gap-8 mb-8 items-start">
-          <div className="col-span-3 p-6 border rounded-md" style={{ borderColor: 'var(--border)', background: 'white' }}>
-          <div className="flex items-baseline justify-between mb-4">
+      <div className="px-4 py-6 sm:px-6 sm:py-8 lg:px-12">
+        <div className="grid grid-cols-1 xl:grid-cols-4 gap-6 sm:gap-8 mb-8 items-start">
+          <div className="xl:col-span-3 p-4 sm:p-6 border rounded-md min-w-0" style={{ borderColor: 'var(--border)', background: 'white' }}>
+          <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-baseline sm:justify-between mb-4">
             <div>
               <h3 className="font-serif text-lg font-medium">Price History</h3>
               <p className="text-xs mt-0.5" style={{ color: 'var(--muted)' }}>Entry marked at publication timestamp · Cannot be retroactively edited</p>
             </div>
-            <div className="flex items-center gap-1 p-1 border rounded-md" style={{ borderColor: 'var(--border)', background: 'white' }}>
+            <div className="flex max-w-full items-center gap-1 p-1 border rounded-md overflow-x-auto" style={{ borderColor: 'var(--border)', background: 'white' }}>
               {RANGES.map((r) => (
                 <button
                   key={r.key}
@@ -361,8 +361,8 @@ export default function ThesisDetail({ navigate, thesis }) {
             : <div className="flex items-center justify-center" style={{ height: 320 }}>
                 <span className="text-xs font-mono" style={{ color: 'var(--muted)' }}>Loading chart…</span>
               </div>}
-          <div className="flex items-center justify-between mt-4 pt-4 border-t text-xs" style={{ borderColor: 'var(--border)' }}>
-            <div className="flex items-center gap-6">
+          <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between mt-4 pt-4 border-t text-xs" style={{ borderColor: 'var(--border)' }}>
+            <div className="grid w-full grid-cols-2 gap-3 sm:flex sm:w-auto sm:items-center sm:gap-6">
               <div>
                 <span style={{ color: 'var(--muted)' }}>Entry: </span>
                 <span className="font-mono font-semibold">{fmtPrice(entry, currency)}</span>
@@ -386,7 +386,7 @@ export default function ThesisDetail({ navigate, thesis }) {
           </div>
           </div>
 
-          <div className="col-span-1 space-y-6">
+          <div className="xl:col-span-1 space-y-6">
             <div>
               <h4 className="font-serif text-base font-medium mb-3">Thesis Controls</h4>
               <div className="space-y-2">
@@ -498,8 +498,8 @@ export default function ThesisDetail({ navigate, thesis }) {
           </div>
         </div>
 
-        <div className="grid grid-cols-4 gap-8">
-          <div className="col-span-3">
+        <div className="grid grid-cols-1 xl:grid-cols-4 gap-8">
+          <div className="xl:col-span-3 min-w-0">
             {base.body
               ? <article className="editor-content" style={{ minHeight: 'auto' }} dangerouslySetInnerHTML={{ __html: base.body }} />
               : <article className="font-serif text-[17px] leading-[1.75]" style={{ color: 'var(--ink-soft)' }}>
@@ -517,7 +517,7 @@ export default function ThesisDetail({ navigate, thesis }) {
             )}
 
             <div className="mt-12">
-              <div className="flex items-baseline justify-between mb-5">
+              <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-baseline sm:justify-between mb-5">
                 <h3 className="font-serif text-xl font-medium">Thesis Updates</h3>
                 {owned && !composerOpen && (
                   <button onClick={openComposer} className="text-xs font-medium flex items-center gap-1.5 px-3 py-1.5 border rounded-md" style={{ borderColor: 'var(--border-strong)', background: 'transparent', cursor: 'pointer' }}>
@@ -652,8 +652,8 @@ export default function ThesisDetail({ navigate, thesis }) {
       </div>
 
       {closeModalOpen && (
-        <div className="fixed inset-0 z-50 modal-backdrop flex items-center justify-center p-8">
-          <div className="bg-white border rounded-lg max-w-lg w-full" style={{ borderColor: 'var(--border-strong)', boxShadow: '0 24px 60px rgba(0,0,0,0.15)' }}>
+        <div className="fixed inset-0 z-50 modal-backdrop flex items-center justify-center p-4 sm:p-8">
+          <div className="bg-white border rounded-lg max-w-lg w-full max-h-[calc(100dvh-2rem)] overflow-y-auto" style={{ borderColor: 'var(--border-strong)', boxShadow: '0 24px 60px rgba(0,0,0,0.15)' }}>
             <div className="p-6 border-b" style={{ borderColor: 'var(--border)' }}>
               <div className="flex items-center gap-2 mb-2">
                 <i className="icon-lock text-base"></i>
@@ -681,9 +681,9 @@ export default function ThesisDetail({ navigate, thesis }) {
               </div>
               {lifecycleError && <p className="text-xs ret-neg">{lifecycleError}</p>}
             </div>
-            <div className="p-6 border-t flex items-center justify-between" style={{ borderColor: 'var(--border)', background: 'var(--bg-warm)' }}>
+            <div className="p-4 sm:p-6 border-t flex flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:justify-between" style={{ borderColor: 'var(--border)', background: 'var(--bg-warm)' }}>
               <button onClick={() => { if (!lifecycleBusy) { setCloseModalOpen(false); setLifecycleError('') } }} className="text-sm font-medium" style={{ color: 'var(--ink-soft)', background: 'transparent', border: 'none', cursor: lifecycleBusy ? 'not-allowed' : 'pointer' }}>Cancel</button>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:gap-2">
                 <label className="flex items-center gap-2 text-xs" style={{ color: 'var(--ink-soft)' }}>
                   <input type="checkbox" checked={closeAck} onChange={(e) => setCloseAck(e.target.checked)} /> I understand this is irreversible
                 </label>

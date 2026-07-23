@@ -22,9 +22,9 @@ export default function PublishModal({ open, publishing, draft, onClose, onConfi
   const POINTS = points(draft?.ticker || 'This position')
 
   return (
-    <div className="fixed inset-0 z-50 modal-backdrop flex items-center justify-center p-8">
-      <div className="bg-white border rounded-lg max-w-lg w-full" style={{ borderColor: 'var(--border-strong)', boxShadow: '0 24px 60px rgba(0,0,0,0.15)' }}>
-        <div className="p-6 border-b" style={{ borderColor: 'var(--border)' }}>
+    <div className="fixed inset-0 z-50 modal-backdrop flex items-center justify-center p-4 sm:p-8">
+      <div className="bg-white border rounded-lg max-w-lg w-full max-h-[calc(100dvh-2rem)] overflow-y-auto" style={{ borderColor: 'var(--border-strong)', boxShadow: '0 24px 60px rgba(0,0,0,0.15)' }}>
+        <div className="p-4 sm:p-6 border-b" style={{ borderColor: 'var(--border)' }}>
           <div className="flex items-center gap-2 mb-2">
             <i className="icon-lock text-base"></i>
             <span className="text-[10px] font-mono uppercase tracking-wider font-semibold">Publication Lock</span>
@@ -32,7 +32,7 @@ export default function PublishModal({ open, publishing, draft, onClose, onConfi
           <h3 className="font-serif text-2xl font-medium">You're about to publish.</h3>
           <p className="text-sm mt-1" style={{ color: 'var(--ink-soft)' }}>This is a one-way action. Read carefully.</p>
         </div>
-        <div className="p-6 space-y-4 text-sm">
+        <div className="p-4 sm:p-6 space-y-4 text-sm">
           {POINTS.map((p, i) => (
             <div key={i} className="flex items-start gap-3">
               <i className={`${p.ok ? 'icon-check' : 'icon-x'} text-base mt-0.5`} style={{ color: p.ok ? 'var(--bull)' : 'var(--bear)' }}></i>
@@ -43,13 +43,13 @@ export default function PublishModal({ open, publishing, draft, onClose, onConfi
             </div>
           ))}
         </div>
-        <div className="p-6 border-t flex items-center justify-between" style={{ borderColor: 'var(--border)', background: 'var(--bg-warm)' }}>
+        <div className="p-4 sm:p-6 border-t flex flex-col-reverse items-stretch gap-3 sm:flex-row sm:items-center sm:justify-between" style={{ borderColor: 'var(--border)', background: 'var(--bg-warm)' }}>
           <button onClick={close} className="text-sm font-medium" style={{ color: 'var(--ink-soft)', background: 'transparent', border: 'none', cursor: 'pointer' }}>Cancel</button>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:gap-2">
             <label className="flex items-center gap-2 text-xs" style={{ color: 'var(--ink-soft)' }}>
               <input type="checkbox" checked={confirmed} onChange={(e) => setConfirmed(e.target.checked)} /> I understand this is irreversible
             </label>
-            <button disabled={!confirmed || publishing} onClick={onConfirm} className="btn-primary text-sm px-5 py-2 rounded-md flex items-center gap-2">
+            <button disabled={!confirmed || publishing} onClick={onConfirm} className="btn-primary justify-center text-sm px-5 py-2 rounded-md flex items-center gap-2">
               <i className="icon-lock text-xs"></i> {publishing ? 'Publishing…' : 'Publish & Lock'}
             </button>
           </div>

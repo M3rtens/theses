@@ -156,7 +156,7 @@ export default function App() {
   }
 
   return (
-    <div id="app" className="relative z-10 flex min-h-screen">
+    <div id="app" className="relative z-10 flex min-h-screen flex-col md:flex-row">
       <Sidebar view={view} navigate={navigate} />
       <main className="flex-1 min-w-0">
         <section key={view} className="view view-enter">

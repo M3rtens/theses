@@ -99,13 +99,13 @@ export default function SecuritySearch({ value, onSelect }) {
         type="button"
         onClick={startEditing}
         title="Click to change security"
-        className="flex items-center gap-2 px-2.5 py-1 input-bordered rounded"
+        className="flex max-w-full items-center gap-2 px-2.5 py-1 input-bordered rounded"
         style={{ background: 'white', cursor: 'pointer' }}
       >
         <span className="font-mono text-sm font-semibold">{value.symbol}</span>
-        <span className="text-xs truncate max-w-[200px]" style={{ color: 'var(--ink-soft)' }}>{value.name}</span>
+        <span className="text-xs truncate max-w-[120px] sm:max-w-[200px]" style={{ color: 'var(--ink-soft)' }}>{value.name}</span>
         {value.exchange && (
-          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded" style={{ background: 'var(--bg-warm)', color: 'var(--muted)' }}>{value.exchange}</span>
+          <span className="hidden sm:inline text-[10px] font-mono px-1.5 py-0.5 rounded" style={{ background: 'var(--bg-warm)', color: 'var(--muted)' }}>{value.exchange}</span>
         )}
         <i className="icon-pencil text-[11px] ml-0.5" style={{ color: 'var(--muted)' }}></i>
       </button>
@@ -113,7 +113,7 @@ export default function SecuritySearch({ value, onSelect }) {
   }
 
   return (
-    <div ref={boxRef} className="relative" style={{ width: '320px' }}>
+    <div ref={boxRef} className="relative min-w-0 flex-1 sm:w-80 sm:flex-none">
       <div className="flex items-center gap-2 px-2.5 py-1 input-bordered rounded" style={{ background: 'white' }}>
         <i className="icon-search text-xs" style={{ color: 'var(--muted)' }}></i>
         <input

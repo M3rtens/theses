@@ -17,9 +17,9 @@ export default function DeleteAccountModal({ open, deleting, error, onClose, onC
   const armed = typed.trim().toUpperCase() === 'DELETE'
 
   return (
-    <div className="fixed inset-0 z-50 modal-backdrop flex items-center justify-center p-8">
-      <div className="bg-white border rounded-lg max-w-md w-full" style={{ borderColor: 'var(--border-strong)', boxShadow: '0 24px 60px rgba(0,0,0,0.15)' }}>
-        <div className="p-6 border-b" style={{ borderColor: 'var(--border)' }}>
+    <div className="fixed inset-0 z-50 modal-backdrop flex items-center justify-center p-4 sm:p-8">
+      <div className="bg-white border rounded-lg max-w-md w-full max-h-[calc(100dvh-2rem)] overflow-y-auto" style={{ borderColor: 'var(--border-strong)', boxShadow: '0 24px 60px rgba(0,0,0,0.15)' }}>
+        <div className="p-4 sm:p-6 border-b" style={{ borderColor: 'var(--border)' }}>
           <div className="flex items-center gap-2 mb-2">
             <i className="icon-triangle-alert text-base" style={{ color: 'var(--bear)' }}></i>
             <span className="text-[10px] font-mono uppercase tracking-wider font-semibold" style={{ color: 'var(--bear)' }}>Delete Account</span>
@@ -27,7 +27,7 @@ export default function DeleteAccountModal({ open, deleting, error, onClose, onC
           <h3 className="font-serif text-2xl font-medium">Delete your profile?</h3>
           <p className="text-sm mt-1" style={{ color: 'var(--ink-soft)' }}>This permanently removes your account and sign-in. This cannot be undone.</p>
         </div>
-        <div className="p-6 text-sm">
+        <div className="p-4 sm:p-6 text-sm">
           <label className="block text-xs font-mono uppercase tracking-wider mb-2" style={{ color: 'var(--muted)' }}>
             Type <span style={{ color: 'var(--bear)' }}>DELETE</span> to confirm
           </label>
@@ -42,7 +42,7 @@ export default function DeleteAccountModal({ open, deleting, error, onClose, onC
           />
           {error && <p className="text-[12px] mt-2" style={{ color: 'var(--bear)' }}>{error}</p>}
         </div>
-        <div className="p-6 border-t flex items-center justify-between" style={{ borderColor: 'var(--border)', background: 'var(--bg-warm)' }}>
+        <div className="p-4 sm:p-6 border-t flex flex-col-reverse items-stretch gap-3 sm:flex-row sm:items-center sm:justify-between" style={{ borderColor: 'var(--border)', background: 'var(--bg-warm)' }}>
           <button onClick={close} disabled={deleting} className="text-sm font-medium" style={{ color: 'var(--ink-soft)', background: 'transparent', border: 'none', cursor: deleting ? 'default' : 'pointer' }}>Cancel</button>
           <button
             onClick={onConfirm}

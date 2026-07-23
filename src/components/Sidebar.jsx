@@ -20,12 +20,30 @@ export default function Sidebar({ view, navigate }) {
   const navClass = (target) => `nav-item ${view === target ? 'active' : ''} cursor-pointer flex items-center gap-2.5 py-1`
   const user = useUser()
   const router = useRouter()
+  const [mobileOpen, setMobileOpen] = useState(false)
 
   const signOut = async () => {
+    setMobileOpen(false)
     await createClient().auth.signOut()
     router.replace('/')
     router.refresh()
   }
+
+  useEffect(() => {
+    setMobileOpen(false)
+  }, [view])
+
+  useEffect(() => {
+    document.body.classList.toggle('mobile-menu-open', mobileOpen)
+    const onKeyDown = (event) => {
+      if (event.key === 'Escape') setMobileOpen(false)
+    }
+    if (mobileOpen) document.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.body.classList.remove('mobile-menu-open')
+      document.removeEventListener('keydown', onKeyDown)
+    }
+  }, [mobileOpen])
 
   // Owner-scoped workspace data is never requested for guests.
   const [stored, setStored] = useState([])
@@ -92,19 +110,33 @@ export default function Sidebar({ view, navigate }) {
     ? NAV_COMMUNITY
     : NAV_COMMUNITY.filter((item) => item.view !== 'profile')
 
-  return (
-    <aside className="w-60 border-r flex flex-col shrink-0 self-start sticky top-0 h-screen" style={{ borderColor: 'var(--border)', background: 'var(--bg)' }}>
+  const go = (target) => {
+    setMobileOpen(false)
+    navigate(target)
+  }
+
+  const sidebarContent = (mobile = false) => (
+    <>
       <div className="px-6 pt-7 pb-8">
-        <div className="flex items-baseline gap-1">
-          <span className="font-serif text-2xl font-medium tracking-tight" style={{ color: 'var(--ink)' }}>Theses</span>
-          <span className="font-serif text-2xl" style={{ color: 'var(--bear)' }}>.</span>
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <div className="flex items-baseline gap-1">
+              <span className="font-serif text-2xl font-medium tracking-tight" style={{ color: 'var(--ink)' }}>Theses</span>
+              <span className="font-serif text-2xl" style={{ color: 'var(--bear)' }}>.</span>
+            </div>
+            <div className="text-[10px] font-mono mt-1 tracking-wider uppercase" style={{ color: 'var(--muted)' }}>v2.4</div>
+          </div>
+          {mobile && (
+            <button type="button" className="mobile-nav-icon" onClick={() => setMobileOpen(false)} aria-label="Close navigation">
+              <i className="icon-x text-lg"></i>
+            </button>
+          )}
         </div>
-        <div className="text-[10px] font-mono mt-1 tracking-wider uppercase" style={{ color: 'var(--muted)' }}>v2.4</div>
       </div>
 
       {user && (
         <div className="px-4 mb-6">
-          <button type="button" onClick={() => navigate('editor')} className="w-full btn-primary text-sm font-medium py-2.5 px-3 rounded-md flex items-center justify-center gap-2">
+          <button type="button" onClick={() => go('editor')} className="w-full btn-primary text-sm font-medium py-2.5 px-3 rounded-md flex items-center justify-center gap-2">
             <i className="icon-plus text-base"></i>
             <span>New Thesis</span>
           </button>
@@ -118,14 +150,14 @@ export default function Sidebar({ view, navigate }) {
             <ul className="space-y-1.5 text-sm">
               {NAV_MAIN.map((item) => (
                 <li key={item.view}>
-                  <button type="button" onClick={() => navigate(item.view)} className={`${navClass(item.view)} w-full text-left`} style={{ color: 'var(--ink-soft)' }}>
+                  <button type="button" onClick={() => go(item.view)} className={`${navClass(item.view)} w-full text-left`} style={{ color: 'var(--ink-soft)' }}>
                     <i className={`${item.icon} text-[15px]`}></i> {item.label}
                     {counts[item.view] != null && <span className="ml-auto text-[10px] font-mono" style={{ color: 'var(--ink-soft)' }}>{counts[item.view]}</span>}
                   </button>
                 </li>
               ))}
               <li>
-                <button type="button" onClick={() => navigate('triggers')} className={`${navClass('triggers')} w-full text-left`} style={{ color: 'var(--ink-soft)' }}>
+                <button type="button" onClick={() => go('triggers')} className={`${navClass('triggers')} w-full text-left`} style={{ color: 'var(--ink-soft)' }}>
                   <i className="icon-bell text-[15px]"></i> Triggers
                   {alertCount > 0 && (
                     <span className="ml-auto inline-flex items-center justify-center w-4 h-4 text-[9px] font-mono" style={{ background: 'var(--bear)', color: 'white', borderRadius: '2px' }}>{alertCount}</span>
@@ -140,7 +172,7 @@ export default function Sidebar({ view, navigate }) {
         <ul className="space-y-1.5 text-sm">
           {communityNav.map((item) => (
             <li key={item.view}>
-              <button type="button" onClick={() => navigate(item.view)} className={`${navClass(item.view)} w-full text-left`} style={{ color: 'var(--ink-soft)' }}>
+              <button type="button" onClick={() => go(item.view)} className={`${navClass(item.view)} w-full text-left`} style={{ color: 'var(--ink-soft)' }}>
                 <i className={`${item.icon} text-[15px]`}></i> {item.label}
               </button>
             </li>
@@ -186,7 +218,10 @@ export default function Sidebar({ view, navigate }) {
         ) : (
           <button
             type="button"
-            onClick={() => router.push('/sign-in')}
+            onClick={() => {
+              setMobileOpen(false)
+              router.push('/sign-in')
+            }}
             className="w-full flex items-center gap-3 p-2 rounded-md text-left hover:bg-gray-50"
             style={{ color: 'var(--ink)', cursor: 'pointer' }}
           >
@@ -200,6 +235,60 @@ export default function Sidebar({ view, navigate }) {
           </button>
         )}
       </div>
-    </aside>
+    </>
+  )
+
+  return (
+    <>
+      <header className="mobile-app-bar md:hidden">
+        <button
+          type="button"
+          className="mobile-nav-icon"
+          onClick={() => setMobileOpen(true)}
+          aria-label="Open navigation"
+          aria-expanded={mobileOpen}
+          aria-controls="mobile-navigation"
+        >
+          <i className="icon-menu text-lg"></i>
+        </button>
+        <button type="button" className="mobile-wordmark" onClick={() => go(user ? 'dashboard' : 'discover')} aria-label="Go to home">
+          <span className="font-serif text-xl font-medium tracking-tight">Theses</span>
+          <span className="font-serif text-xl" style={{ color: 'var(--bear)' }}>.</span>
+        </button>
+        {user ? (
+          <button type="button" className="mobile-nav-icon" onClick={() => go('editor')} aria-label="Create a new thesis">
+            <i className="icon-plus text-lg"></i>
+          </button>
+        ) : (
+          <button type="button" className="mobile-nav-icon" onClick={() => router.push('/sign-in')} aria-label="Sign in">
+            <i className="icon-log-in text-base"></i>
+          </button>
+        )}
+      </header>
+
+      <button
+        type="button"
+        className={`mobile-nav-backdrop md:hidden ${mobileOpen ? 'open' : ''}`}
+        onClick={() => setMobileOpen(false)}
+        aria-label="Close navigation"
+        tabIndex={mobileOpen ? 0 : -1}
+      />
+      <aside
+        id="mobile-navigation"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Navigation"
+        aria-hidden={!mobileOpen}
+        inert={!mobileOpen}
+        className={`mobile-nav-drawer md:hidden ${mobileOpen ? 'open' : ''}`}
+        style={{ borderColor: 'var(--border)', background: 'var(--bg)' }}
+      >
+        {sidebarContent(true)}
+      </aside>
+
+      <aside className="hidden w-60 border-r md:flex flex-col shrink-0 self-start sticky top-0 h-screen" style={{ borderColor: 'var(--border)', background: 'var(--bg)' }}>
+        {sidebarContent(false)}
+      </aside>
+    </>
   )
 }
