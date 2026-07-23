@@ -1,7 +1,7 @@
 import './globals.css'
 
 export const metadata = {
-  title: 'Theses — Publish what you believe. Track what happens.',
+  title: 'Theses',
 }
 
 export default function RootLayout({ children }) {
