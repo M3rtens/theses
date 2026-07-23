@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useData } from '../components/DataProvider.jsx'
+import { useUser } from '../components/UserProvider.jsx'
 import PriceChart from '../components/PriceChart.jsx'
 import SpreadsheetViewer from '../components/SpreadsheetViewer.jsx'
 import { fmtPrice } from '../lib/format.js'
@@ -37,11 +38,18 @@ export default function ThesisDetail({ navigate, thesis }) {
   // Refresh the app-wide cache after lifecycle mutations so the counts and
   // statuses on other views (My Theses, Triggers, Leaderboard) stay in step.
   const { refresh } = useData()
+  const user = useUser()
   // The thesis to show comes from navigation. Guard against a direct load with no
   // selection so the hooks below still run against a defined object.
   const base = thesis || {}
+  // Community-feed records carry their joined profile name. Owner-scoped records
+  // do not, so fall back to the signed-in profile instead of presentation copy.
+  const authorName = base.author || user?.name || 'Analyst'
 
-  const symbol = base.ticker || 'ASML'
+  // Use the exact listing sealed at publication. Falling back to the display
+  // ticker can silently switch a foreign security to an ADR or another venue,
+  // making the chart and locked native-currency entry incomparable.
+  const symbol = base.resolvedSymbol || base.ticker || 'ASML'
   const entryDate = base.entryDate || '2024-03-14'
 
   // Thesis stats (entry, current, financials, and the since-publication history)
@@ -296,7 +304,7 @@ export default function ThesisDetail({ navigate, thesis }) {
             </div>
             <h1 className="font-serif text-4xl font-medium tracking-tight leading-tight">{base.title}</h1>
             <div className="flex items-center gap-4 mt-3 text-xs" style={{ color: 'var(--muted)' }}>
-              <span>By <span style={{ color: 'var(--ink)', fontWeight: 500 }}>Elena Vance</span></span>
+              <span>By <span style={{ color: 'var(--ink)', fontWeight: 500 }}>{authorName}</span></span>
               <span>·</span>
               <span className="font-mono">Published {base.publishDate}</span>
               <span>·</span>

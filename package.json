@@ -8,7 +8,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "oxlint",
-    "test:spreadsheet": "node --test --test-isolation=none tests/spreadsheet.test.mjs"
+    "test:spreadsheet": "node --test --test-isolation=none tests/spreadsheet.test.mjs",
+    "seed:screenshots": "node --env-file=.env.local scripts/seed-screenshots.mjs"
   },
   "dependencies": {
     "@handsontable/react-wrapper": "^18.0.0",

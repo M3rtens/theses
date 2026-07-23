@@ -248,9 +248,34 @@ Open [http://localhost:3000](http://localhost:3000).
 | `npm run build` | Create an optimized production build. |
 | `npm run start` | Start the production server after a build. |
 | `npm run lint` | Run Oxlint. |
+| `npm run seed:screenshots` | Add or refresh the marked screenshot/demo dataset in Supabase. |
 | `npm run test:spreadsheet` | Run the spreadsheet utility, formula-engine, and export tests. |
 
 There is currently no full end-to-end test suite; the committed automated tests focus on the spreadsheet subsystem.
+
+## Screenshot data
+
+The repository includes an idempotent Supabase seed script for local demos and screenshots. It creates four fictional analyst profiles and 18 realistic theses, including active and closed positions, updates, triggers, and example two-sheet financial models. Existing users and unmarked thesis rows are left unchanged, except that the exact `Amazon` / `Test.` placeholder on the selected owner account is upgraded in place.
+
+To add six sample theses to a specific existing account and populate the community views:
+
+```bash
+npm run seed:screenshots -- --owner-name "Your Supabase display name"
+```
+
+You can also target an account by Auth user ID:
+
+```bash
+npm run seed:screenshots -- --owner-id "your-auth-user-uuid"
+```
+
+The script requires the Supabase variables from `.env.local`, including the service-role key. It marks every generated row and demo Auth user with `theses-screenshot-v1`, so rerunning the command updates the same records instead of creating duplicates.
+
+To remove only the generated screenshot dataset:
+
+```bash
+npm run seed:screenshots -- --clean
+```
 
 ## Application architecture
 
@@ -316,7 +341,7 @@ Before deploying elsewhere, confirm that the host supports the Node.js runtime u
 
 ## Known limitations
 
-- Supabase migrations and seed data are not committed; the database must be provisioned separately.
+- Supabase migrations are not committed; the database schema must be provisioned separately before using the seed script.
 - Drafts and profile bios are local to one browser and are not synchronized across devices.
 - Dropping a Word document currently displays import progress messages but does not parse or insert the document.
 - The rich-text editor uses browser `contentEditable` and `document.execCommand`; it is not backed by Tiptap or another structured editor framework.

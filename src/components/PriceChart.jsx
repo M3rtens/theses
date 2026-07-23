@@ -138,15 +138,37 @@ export default function PriceChart({ history, benchmark, entry, currency, publis
     const pubIdx = pubNum == null ? -1 : priceData.findIndex((p) => timeToNum(p.time) >= pubNum)
     const pubBar = pubIdx === -1 ? null : priceData[pubIdx]
 
-    const markers = []
+    // A marker attached directly to priceSeries would sit on the historical
+    // daily close, even when the sealed publication entry was intraday or came
+    // from an independently locked quote. Anchor publication to a one-point
+    // invisible series so both its date and displayed price are exact.
     if (pubBar) {
-      markers.push({ time: pubBar.time, position: 'belowBar', color: '#1A1A17', shape: 'arrowUp', text: `PUBLISHED ${cur}${entryVal.toFixed(0)}` })
+      const publicationSeries = chart.addSeries(LineSeries, {
+        color: 'rgba(0, 0, 0, 0)',
+        lineVisible: false,
+        pointMarkersVisible: false,
+        priceLineVisible: false,
+        lastValueVisible: false,
+        crosshairMarkerVisible: false,
+      })
+      publicationSeries.setData([{ time: pubBar.time, value: entryVal }])
+      createSeriesMarkers(publicationSeries, [
+        {
+          time: pubBar.time,
+          position: 'belowBar',
+          color: '#1A1A17',
+          shape: 'arrowUp',
+          text: `PUBLISHED ${cur}${entryVal.toFixed(0)}`,
+        },
+      ])
     }
+
+    const priceMarkers = []
     // Add a NOW marker unless it would sit on the same bar as publication.
     if (!pubBar || last.time !== pubBar.time) {
-      markers.push({ time: last.time, position: 'aboveBar', color: '#2D5F3F', shape: 'circle', text: `NOW ${cur}${last.value.toFixed(0)}` })
+      priceMarkers.push({ time: last.time, position: 'aboveBar', color: '#2D5F3F', shape: 'circle', text: `NOW ${cur}${last.value.toFixed(0)}` })
     }
-    createSeriesMarkers(priceSeries, markers)
+    createSeriesMarkers(priceSeries, priceMarkers)
 
     chart.timeScale().fitContent()
 
