@@ -2,6 +2,8 @@
 
 > Publish what you believe. Track what happens.
 
+[**Open the live application →**](https://your-theses.vercel.app)
+
 Theses is a full-stack investment-journal application for writing, publishing, and tracking public-market investment theses. Its central design goal is accountability: entry prices and publication timestamps are recorded on the server, published thesis bodies are not editable through the application, and subsequent changes are captured as timestamped updates.
 
 The repository currently contains a working Next.js prototype with Supabase authentication and persistence, Yahoo Finance market data, structured invalidation triggers, performance tracking, community views, and an Excel-style financial model editor.
@@ -332,14 +334,38 @@ tests/
 
 ## Deployment
 
-The application can be deployed on Vercel as a standard Next.js project:
+The production application is deployed on Vercel:
+
+**[https://your-theses.vercel.app](https://your-theses.vercel.app)**
+
+It uses the standard Next.js build settings and requires these environment variables in both the Production and Preview environments:
+
+```text
+NEXT_PUBLIC_SUPABASE_URL
+NEXT_PUBLIC_SUPABASE_ANON_KEY
+SUPABASE_SERVICE_ROLE_KEY
+```
+
+`SUPABASE_SERVICE_ROLE_KEY` must be configured as a sensitive, server-only variable.
+
+Supabase Auth is configured with:
+
+```text
+Site URL:
+https://your-theses.vercel.app
+
+Redirect URLs:
+https://your-theses.vercel.app/auth/callback
+https://your-theses.vercel.app/auth/confirm
+```
+
+To create another deployment:
 
 1. Import the GitHub repository into Vercel.
 2. Add all three Supabase environment variables to Production and Preview.
 3. Deploy using the default Next.js build settings.
-4. Set the Supabase Auth Site URL to the production domain.
-5. Add the production `/auth/callback` and `/auth/confirm` URLs to Supabase's redirect allow list.
-6. Add preview-domain redirect patterns if authentication should work on Vercel preview deployments.
+4. Update the Supabase Site URL and redirect allow list to match the new production domain.
+5. Add preview-domain redirect patterns if authentication should work on Vercel preview deployments.
 
 Before deploying elsewhere, confirm that the host supports the Node.js runtime used by the Yahoo Finance and Supabase route handlers.
 
