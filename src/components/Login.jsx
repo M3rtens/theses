@@ -36,9 +36,6 @@ export default function Login() {
           <i className="icon-arrow-left text-[11px]"></i>
           Continue browsing as a guest
         </Link>
-        <p className="text-[11px] font-mono mt-8" style={{ color: 'var(--faint)' }}>
-          Integrity-protected · timestamps are system-generated
-        </p>
       </div>
     </div>
   )

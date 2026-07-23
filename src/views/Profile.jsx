@@ -122,7 +122,7 @@ export default function Profile({ navigate }) {
               <h1 className="font-serif text-3xl font-medium tracking-tight">{me?.name || 'You'}</h1>
               <span className="seal"><i className="icon-badge-check text-[11px]"></i> Verified Analyst</span>
             </div>
-            <div className="text-sm font-mono" style={{ color: 'var(--muted)' }}>{me?.handle || ''} · Joined Jan 2022 · San Francisco</div>
+            <div className="text-sm font-mono" style={{ color: 'var(--muted)' }}>{me?.handle || ''} · Joined Jan 2022</div>
             {editing === null ? (
               <p className="text-sm mt-2 max-w-xl" style={{ color: 'var(--ink-soft)' }}>{bio}</p>
             ) : (

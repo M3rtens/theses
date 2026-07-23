@@ -99,7 +99,7 @@ export default function Sidebar({ view, navigate }) {
           <span className="font-serif text-2xl font-medium tracking-tight" style={{ color: 'var(--ink)' }}>Theses</span>
           <span className="font-serif text-2xl" style={{ color: 'var(--bear)' }}>.</span>
         </div>
-        <div className="text-[10px] font-mono mt-1 tracking-wider uppercase" style={{ color: 'var(--muted)' }}>v2.4 · Integrity Build</div>
+        <div className="text-[10px] font-mono mt-1 tracking-wider uppercase" style={{ color: 'var(--muted)' }}>v2.4</div>
       </div>
 
       {user && (

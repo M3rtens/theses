@@ -69,9 +69,6 @@ export default function Dashboard({ navigate }) {
           <h1 className="font-serif text-3xl font-medium tracking-tight">{greeting}{user?.firstName ? `, ${user.firstName}` : ''}.</h1>
           <p className="text-sm mt-1" style={{ color: 'var(--ink-soft)' }}>You have <span style={{ color: alerts.length ? 'var(--bear)' : 'var(--ink-soft)', fontWeight: 500 }}>{alerts.length} trigger alert{alerts.length === 1 ? '' : 's'}</span> and <span style={{ fontWeight: 500 }}>1 draft</span> awaiting review.</p>
         </div>
-        <div className="flex items-center gap-3">
-          <div className="seal"><i className="icon-shield-check text-[11px]"></i> Integrity: Verified</div>
-        </div>
       </header>
 
       <div className="px-12 py-8">

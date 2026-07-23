@@ -478,7 +478,7 @@ export default function ThesisDetail({ navigate, thesis }) {
             <div className="p-4 border rounded" style={{ borderColor: 'var(--border)', background: 'var(--bg-warm)' }}>
               <div className="flex items-center gap-2 mb-2">
                 <i className="icon-shield-check text-sm"></i>
-                <span className="text-xs font-mono uppercase tracking-wider font-semibold">Integrity Record</span>
+                <span className="text-xs font-mono uppercase tracking-wider font-semibold">Record</span>
               </div>
               <div className="space-y-1.5 text-[11px] font-mono" style={{ color: 'var(--ink-soft)' }}>
                 <div className="flex justify-between"><span>Created:</span><span>{created}</span></div>
@@ -634,6 +634,14 @@ export default function ThesisDetail({ navigate, thesis }) {
                     <div className="flex justify-between"><span style={{ color: 'var(--ink-soft)' }}>Cash &amp; Equivalents</span><span className="font-mono">{fin('cash')}</span></div>
                     <div className="flex justify-between"><span style={{ color: 'var(--ink-soft)' }}>Total Debt</span><span className="font-mono">{fin('totalDebt')}</span></div>
                     <div className="flex justify-between border-t pt-2 mt-2" style={{ borderColor: 'var(--border)' }}><span style={{ color: 'var(--ink-soft)' }}>Net Cash Position</span><span className="font-mono ret-pos">{fin('netCash')}</span></div>
+                  </div>
+                </div>
+                <div className="p-4 border rounded-md" style={{ borderColor: 'var(--border)', background: 'white' }}>
+                  <div className="text-[10px] font-mono uppercase tracking-wider mb-3" style={{ color: 'var(--muted)' }}>Cash Flow Statement</div>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between gap-3"><span style={{ color: 'var(--ink-soft)' }}>Operating Cash Flow (TTM)</span><span className="font-mono shrink-0">{fin('operatingCashFlow')}</span></div>
+                    <div className="flex justify-between gap-3"><span style={{ color: 'var(--ink-soft)' }}>Capital Expenditures</span><span className="font-mono shrink-0">{fin('capitalExpenditure')}</span></div>
+                    <div className="flex justify-between gap-3 border-t pt-2 mt-2" style={{ borderColor: 'var(--border)' }}><span style={{ color: 'var(--ink-soft)' }}>Free Cash Flow</span><span className="font-mono font-semibold shrink-0">{fin('freeCashFlow')}</span></div>
                   </div>
                 </div>
               </div>

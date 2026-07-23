@@ -5,7 +5,9 @@ const yf = new YahooFinance({ suppressNotices: ['yahooSurvey', 'ripHistorical'] 
 
 const CURRENCY_SYMBOL = { USD: '$', EUR: '€', GBP: '£', JPY: '¥' }
 const sym = (c) => CURRENCY_SYMBOL[c] || (c ? `${c} ` : '$')
-const toBillions = (n, c) => (n == null ? null : `${sym(c)}${(n / 1e9).toFixed(1)}B`)
+const toBillions = (n, c) => (
+  n == null ? null : `${n < 0 ? '-' : ''}${sym(c)}${(Math.abs(n) / 1e9).toFixed(1)}B`
+)
 
 function toTime(date) {
   const d = new Date(date)
@@ -191,6 +193,13 @@ export async function getThesisData(inputSymbol, from) {
   const cash = fd.totalCash ?? null
   const debt = fd.totalDebt ?? null
   const netCash = cash != null && debt != null ? cash - debt : null
+  const operatingCashFlow = fd.operatingCashflow ?? null
+  const freeCashFlow = fd.freeCashflow ?? null
+  // Yahoo exposes TTM operating and free cash flow in financialData. Present
+  // capital expenditure as an outflow, derived from FCF = OCF + capex.
+  const capitalExpenditure = operatingCashFlow != null && freeCashFlow != null
+    ? freeCashFlow - operatingCashFlow
+    : null
 
   const financials = {
     revenue: toBillions(fd.totalRevenue, fcur),
@@ -201,6 +210,9 @@ export async function getThesisData(inputSymbol, from) {
     cash: toBillions(cash, fcur),
     totalDebt: toBillions(debt, fcur),
     netCash: netCash == null ? null : `${netCash >= 0 ? '+' : '−'}${toBillions(Math.abs(netCash), fcur)}`,
+    operatingCashFlow: toBillions(operatingCashFlow, fcur),
+    capitalExpenditure: toBillions(capitalExpenditure, fcur),
+    freeCashFlow: toBillions(freeCashFlow, fcur),
   }
 
   return {

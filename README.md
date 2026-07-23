@@ -2,7 +2,7 @@
 
 > Publish what you believe. Track what happens.
 
-[**Open the live application →**](https://your-theses.vercel.app)
+[**Open the live application →**](https://your-theses.vercel.app) ([https://your-theses.vercel.app](https://your-theses.vercel.app))
 
 Theses is a full-stack investment-journal application for writing, publishing, and tracking public-market investment theses. Its central design goal is accountability: entry prices and publication timestamps are recorded on the server, published thesis bodies are not editable through the application, and subsequent changes are captured as timestamped updates.
 
