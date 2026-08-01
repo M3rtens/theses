@@ -132,6 +132,7 @@ The Model tab contains an Excel-style workbook editor built with Handsontable, H
 | Authentication | Supabase Auth with `@supabase/ssr` |
 | Database | Supabase Postgres with Row Level Security |
 | Market data | `yahoo-finance2` |
+| Distributed rate limiting | Upstash Redis and `@upstash/ratelimit` |
 | Charts | TradingView Lightweight Charts and accessible inline SVG model charts |
 | Rich-text editor | Tiptap / ProseMirror |
 | Spreadsheet grid | Handsontable |
@@ -167,11 +168,16 @@ NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
 SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
 LIFECYCLE_WORKER_SECRET=replace-with-a-long-random-secret
+# Optional locally; required for shared production rate limiting.
+UPSTASH_REDIS_REST_URL=https://your-database.upstash.io
+UPSTASH_REDIS_REST_TOKEN=your-rest-token
 # Optional outside Vercel; used as the canonical metadata origin.
 NEXT_PUBLIC_SITE_URL=http://localhost:3000
 ```
 
 `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` are used by browser and server Supabase clients, including anonymous reads from the restricted public thesis view. `SUPABASE_SERVICE_ROLE_KEY` is used only on the server for account deletion, controlled mutations, and explicit public analyst projections. `LIFECYCLE_WORKER_SECRET` authenticates calls from Supabase Cron to the two internal worker routes and should be a cryptographically random value of at least 16 characters. Neither secret may be exposed to browser code or committed to Git.
+
+`UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` enable shared sliding-window limits for the Yahoo Finance-backed routes across every deployed application instance. If they are absent, local development uses the bounded in-memory limiter. If Redis becomes temporarily unavailable, production also falls back to that local limiter instead of leaving the provider routes unprotected.
 
 ### 3. Configure Supabase Auth
 
@@ -399,7 +405,7 @@ Before deploying elsewhere, confirm that the host supports the Node.js runtime u
 - Lifecycle automation depends on the separately configured Supabase Cron jobs; applying the migration alone does not start the workers.
 - Notifications are in-app only and are polled once per minute; email and push delivery are not implemented.
 - Market data is dependent on Yahoo Finance availability and is polled rather than streamed.
-- Public request limiting is process-local; configure a shared deployment-edge limit for multi-instance production enforcement.
+- Shared request limiting requires the two Upstash Redis environment variables in every production environment; without them the app intentionally falls back to per-instance protection.
 - Script execution uses per-request CSP nonces without `script-src 'unsafe-inline'`; `style-src 'unsafe-inline'` remains for the current React style attributes.
 - Automated tests do not yet exercise Supabase policies/functions against a disposable database or cover an authenticated browser publish-to-close workflow.
 

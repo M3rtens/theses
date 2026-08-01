@@ -13,7 +13,7 @@ export const dynamic = 'force-dynamic'
 
 // POST { items: [{ symbol, from }] } -> native entry/current/return per symbol.
 export async function POST(request) {
-  const limited = rateLimitFailure(checkRateLimit(request, { scope: 'cards', limit: 30 }))
+  const limited = rateLimitFailure(await checkRateLimit(request, { scope: 'cards', limit: 30 }))
   if (limited) return NextResponse.json(limited.body, limited.init)
 
   let body

@@ -44,6 +44,7 @@ import {
   checkRateLimit,
   rateLimitFailure,
   resetRateLimitsForTests,
+  sharedRateLimitConfigured,
 } from '../src/lib/rateLimit.js'
 import {
   applySecurityHeaders,
@@ -451,7 +452,7 @@ test('async provider cache deduplicates in-flight work and never stores failures
   assert.equal(attempts, 2)
 })
 
-test('public route limiter scopes clients and returns retry guidance', () => {
+test('public route limiter scopes clients and returns retry guidance', async () => {
   resetRateLimitsForTests()
   const firstClient = new Request('https://example.test/api/quotes', {
     headers: { 'x-forwarded-for': '203.0.113.1, 10.0.0.1' },
@@ -460,16 +461,46 @@ test('public route limiter scopes clients and returns retry guidance', () => {
     headers: { 'x-forwarded-for': '203.0.113.2' },
   })
   const options = { scope: 'quotes', limit: 2, windowMs: 10_000 }
-  assert.equal(checkRateLimit(firstClient, options, 1_000).allowed, true)
-  assert.equal(checkRateLimit(firstClient, options, 1_001).allowed, true)
-  const rejected = checkRateLimit(firstClient, options, 1_002)
+  assert.equal((await checkRateLimit(firstClient, options, 1_000, null)).allowed, true)
+  assert.equal((await checkRateLimit(firstClient, options, 1_001, null)).allowed, true)
+  const rejected = await checkRateLimit(firstClient, options, 1_002, null)
   assert.equal(rejected.allowed, false)
   assert.deepEqual(rateLimitFailure(rejected), {
     body: { error: 'too many requests; try again shortly' },
     init: { status: 429, headers: { 'Retry-After': '10' } },
   })
-  assert.equal(checkRateLimit(secondClient, options, 1_002).allowed, true)
-  assert.equal(checkRateLimit(firstClient, options, 11_001).allowed, true)
+  assert.equal((await checkRateLimit(secondClient, options, 1_002, null)).allowed, true)
+  assert.equal((await checkRateLimit(firstClient, options, 11_001, null)).allowed, true)
+})
+
+test('shared route limiter uses Redis results and falls back locally on failures', async () => {
+  resetRateLimitsForTests()
+  assert.equal(sharedRateLimitConfigured({}), false)
+  assert.equal(sharedRateLimitConfigured({ UPSTASH_REDIS_REST_URL: 'https://redis.test', UPSTASH_REDIS_REST_TOKEN: 'secret' }), true)
+  const request = new Request('https://example.test/api/quotes', {
+    headers: { 'x-forwarded-for': '203.0.113.8' },
+  })
+  let identifier
+  const shared = {
+    limit: async (value) => {
+      identifier = value
+      return { success: false, reset: 11_000 }
+    },
+  }
+  const blocked = await checkRateLimit(request, { scope: 'quotes', limit: 2, windowMs: 10_000 }, 1_000, shared)
+  assert.equal(identifier, '203.0.113.8')
+  assert.deepEqual(blocked, { allowed: false, retryAfter: 10, source: 'shared' })
+
+  const originalError = console.error
+  console.error = () => {}
+  try {
+    const fallback = await checkRateLimit(request, { scope: 'quotes', limit: 2, windowMs: 10_000 }, 1_000, {
+      limit: async () => { throw new Error('redis unavailable') },
+    })
+    assert.deepEqual(fallback, { allowed: true, retryAfter: 0, source: 'local' })
+  } finally {
+    console.error = originalError
+  }
 })
 
 test('public thesis projection maps only explicit fields and sanitizes HTML', () => {

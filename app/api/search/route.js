@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic'
 
 // GET /api/search?q=asml -> up to ~10 matching securities.
 export async function GET(request) {
-  const limited = rateLimitFailure(checkRateLimit(request, { scope: 'search', limit: 60 }))
+  const limited = rateLimitFailure(await checkRateLimit(request, { scope: 'search', limit: 60 }))
   if (limited) return NextResponse.json(limited.body, limited.init)
 
   const { searchParams } = new URL(request.url)

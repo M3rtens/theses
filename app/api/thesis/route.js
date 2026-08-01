@@ -11,7 +11,7 @@ export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 export async function GET(request) {
-  const limited = rateLimitFailure(checkRateLimit(request, { scope: 'thesis', limit: 40 }))
+  const limited = rateLimitFailure(await checkRateLimit(request, { scope: 'thesis', limit: 40 }))
   if (limited) return NextResponse.json(limited.body, limited.init)
 
   const { searchParams } = new URL(request.url)
