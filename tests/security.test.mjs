@@ -9,6 +9,8 @@ import {
   validateCardItems,
   validateHistoryDate,
   validateLifecyclePayload,
+  validateNotificationReadPayload,
+  validateScheduledPublicationPayload,
   validateThesisPayload,
   validateUpdatePayload,
 } from '../src/lib/apiValidation.js'
@@ -16,6 +18,12 @@ import { sanitizeThesisHtml } from '../src/lib/html.js'
 import { normalizePublicUrl } from '../src/lib/urls.js'
 import { createAsyncCache } from '../src/lib/asyncCache.js'
 import { hydrateProjectedThesis } from '../src/lib/publicTheses.js'
+import {
+  calendarDateInTimezone,
+  marketSnapshotEligibility,
+  verifyWorkerAuthorization,
+} from '../src/lib/lifecycle.js'
+import { buildThesisRefreshPatch } from '../src/lib/refreshMetrics.js'
 import {
   checkRateLimit,
   rateLimitFailure,
@@ -108,6 +116,78 @@ test('date and lifecycle validation rejects impossible and stale dates', () => {
   assert.throws(() => validateHistoryDate('1969-12-31'), /supported history range/)
   assert.throws(() => validateLifecyclePayload({ action: 'schedule-close', closeDate: '2027-99-99' }), /real calendar date/)
   assert.deepEqual(validateLifecyclePayload({ action: 'close' }), { action: 'close' })
+})
+
+test('scheduled publication and notification requests validate durable inputs', () => {
+  const scheduledDate = new Date(Date.now() + 86400000).toISOString().slice(0, 10)
+  const scheduled = validateScheduledPublicationPayload({
+    title: 'Scheduled thesis',
+    ticker: 'aapl',
+    side: 'bull',
+    scheduledPublicationDate: scheduledDate,
+    scheduledPublicationId: 12,
+  })
+  assert.equal(scheduled.scheduledDate, scheduledDate)
+  assert.equal(scheduled.thesis.ticker, 'AAPL')
+  assert.deepEqual(validateNotificationReadPayload({ ids: [3, 3, 7] }), {
+    all: false,
+    ids: [3, 7],
+  })
+  assert.deepEqual(validateNotificationReadPayload({ all: true }), { all: true, ids: [] })
+  assert.throws(() => validateNotificationReadPayload({ ids: [0] }), /positive integers/)
+})
+
+test('exchange-local scheduling requires a fresh regular-session snapshot', () => {
+  const now = Date.parse('2026-08-03T15:00:00.000Z')
+  assert.equal(calendarDateInTimezone('2026-08-01T00:30:00.000Z', 'America/New_York'), '2026-07-31')
+  assert.equal(calendarDateInTimezone('2026-08-01T00:30:00.000Z', 'Australia/Sydney'), '2026-08-01')
+
+  const snapshot = {
+    marketState: 'REGULAR',
+    marketTime: '2026-08-03T14:59:00.000Z',
+  }
+  assert.deepEqual(
+    marketSnapshotEligibility(snapshot, '2026-08-03', 'America/New_York', now),
+    { eligible: true, reason: null, failure: false, marketDate: '2026-08-03' },
+  )
+  assert.deepEqual(
+    marketSnapshotEligibility({ ...snapshot, marketState: 'CLOSED' }, '2026-08-03', 'America/New_York', now),
+    { eligible: false, reason: 'market_closed', failure: false },
+  )
+  assert.deepEqual(
+    marketSnapshotEligibility({ ...snapshot, marketTime: '2026-08-03T13:00:00.000Z' }, '2026-08-03', 'America/New_York', now),
+    { eligible: false, reason: 'stale_market_snapshot', failure: true },
+  )
+  assert.deepEqual(
+    marketSnapshotEligibility(snapshot, '2026-08-04', 'America/New_York', now),
+    { eligible: false, reason: 'market_date_before_schedule', failure: false },
+  )
+})
+
+test('worker authentication uses the configured bearer secret', () => {
+  const secret = 'test-worker-secret-1234567890'
+  const valid = new Request('https://example.test/api/internal/lifecycle', {
+    headers: { authorization: `Bearer ${secret}` },
+  })
+  const invalid = new Request('https://example.test/api/internal/lifecycle', {
+    headers: { authorization: 'Bearer wrong-secret-value' },
+  })
+  assert.equal(verifyWorkerAuthorization(valid, secret), true)
+  assert.equal(verifyWorkerAuthorization(invalid, secret), false)
+  assert.equal(verifyWorkerAuthorization(valid, 'short'), false)
+})
+
+test('background return refreshes use the sealed entry price', () => {
+  const now = Date.parse('2026-08-11T00:00:00.000Z')
+  const bull = buildThesisRefreshPatch({
+    side: 'bull', entry: 100, current: 100, ret: 0, entryDate: '2026-08-01', daysActive: 0,
+  }, { current: 112 }, null, now)
+  assert.deepEqual(bull, { ret: 12, current: 112, daysActive: 10 })
+
+  const bear = buildThesisRefreshPatch({
+    side: 'bear', entry: 100, current: 100, ret: 0, entryDate: '2026-08-01', daysActive: 0,
+  }, { price: 90 }, null, now)
+  assert.deepEqual(bear, { ret: 10, current: 90, daysActive: 10 })
 })
 
 test('updates and card batches enforce field and fan-out limits', () => {
@@ -236,6 +316,14 @@ test('core integrity migration seals theses and restricts public reads', async (
     new URL('../supabase/migrations/202608010001_core_integrity.sql', import.meta.url),
     'utf8',
   )
+  const lifecycle = await readFile(
+    new URL('../supabase/migrations/202608010002_automated_lifecycle.sql', import.meta.url),
+    'utf8',
+  )
+  const cron = await readFile(
+    new URL('../supabase/cron/setup_lifecycle.sql', import.meta.url),
+    'utf8',
+  )
   assert.match(base, /create table if not exists public\.profiles/i)
   assert.match(base, /create table if not exists public\.theses/i)
   assert.match(base, /using \(auth\.uid\(\) = user_id\)/i)
@@ -250,4 +338,24 @@ test('core integrity migration seals theses and restricts public reads', async (
   for (const rpc of ['append_thesis_update', 'schedule_thesis_close', 'close_thesis', 'update_thesis_metrics']) {
     assert.match(migration, new RegExp(`grant execute on function public\\.${rpc}`, 'i'))
   }
+  assert.match(lifecycle, /create table if not exists public\.lifecycle_jobs/i)
+  assert.match(lifecycle, /create table if not exists public\.notifications/i)
+  assert.match(lifecycle, /for update skip locked/i)
+  assert.match(lifecycle, /lease_expires_at/i)
+  assert.match(lifecycle, /refresh_lease_expires_at/i)
+  assert.match(lifecycle, /interval '15 minutes'/i)
+  assert.match(lifecycle, /on conflict \(event_key\) do nothing/i)
+  assert.match(lifecycle, /grant update \(read_at\) on public\.notifications to authenticated/i)
+  for (const rpc of [
+    'claim_lifecycle_jobs',
+    'finalize_publication_job',
+    'finalize_close_job',
+    'claim_thesis_refreshes',
+    'apply_thesis_refresh',
+  ]) {
+    assert.match(lifecycle, new RegExp(`grant execute on function public\\.${rpc}`, 'i'))
+  }
+  assert.match(cron, /theses-lifecycle-worker/)
+  assert.match(cron, /theses-refresh-worker/)
+  assert.match(cron, /vault\.decrypted_secrets/)
 })

@@ -325,10 +325,14 @@ export function searchSecurities(query) {
   return searchCache.get(normalized.toLocaleLowerCase('en-US'), () => loadSecuritySearch(normalized))
 }
 
-// Snapshot a symbol's live price in its native currency, for sealing a thesis's
-// entry at publication. Resolves to the primary listing first so the locked price
-// (and everything derived from it) is in the company's own currency, never a US line.
-export async function lockEntryPrice(inputSymbol) {
+const marketTimeIso = (value) => {
+  if (!value) return null
+  const date = value instanceof Date ? value : new Date(value)
+  return Number.isNaN(date.getTime()) ? null : date.toISOString()
+}
+
+// Uncached by design: lifecycle finalization must use a fresh provider snapshot.
+export async function getMarketSnapshot(inputSymbol) {
   const symbol = await resolvePrimarySymbol(inputSymbol)
   const [quote, summary] = await Promise.all([
     yf.quote(symbol),
@@ -343,7 +347,28 @@ export async function lockEntryPrice(inputSymbol) {
     company: quote?.longName || quote?.shortName || summary?.price?.longName || symbol,
     exchange: quote?.fullExchangeName || quote?.exchange || null,
     sector: summary?.assetProfile?.industry || summary?.assetProfile?.sector || null,
+    exchangeTimezone: quote?.exchangeTimezoneName || 'UTC',
+    marketState: quote?.marketState || null,
+    marketTime: marketTimeIso(quote?.regularMarketTime),
   }
+}
+
+// Resolve the exchange metadata required to interpret a date-only schedule.
+// Price is intentionally omitted so scheduling does not seal an entry early.
+export async function getSchedulingMetadata(inputSymbol) {
+  const snapshot = await getMarketSnapshot(inputSymbol)
+  return {
+    resolvedSymbol: snapshot.resolvedSymbol,
+    exchange: snapshot.exchange,
+    exchangeTimezone: snapshot.exchangeTimezone,
+  }
+}
+
+// Snapshot a symbol's live price in its native currency, for sealing a thesis's
+// entry at publication. Resolves to the primary listing first so the locked price
+// (and everything derived from it) is in the company's own currency, never a US line.
+export async function lockEntryPrice(inputSymbol) {
+  return getMarketSnapshot(inputSymbol)
 }
 
 // Native entry/current/return for a batch of thesis cards. Each item carries the
@@ -361,13 +386,14 @@ async function loadCardData(items) {
           yf.quote(symbol).catch(() => null),
         ])
         const rows = (chart?.quotes || []).filter((q) => q.close != null)
-        if (!rows.length) return { symbol: inputSymbol, error: true }
+        if (!rows.length) return { symbol: inputSymbol, from, error: true }
         const entry = Number(rows[0].close.toFixed(2))
         const current = Number((quote?.regularMarketPrice ?? rows[rows.length - 1].close).toFixed(2))
         // Raw price move; the client applies side (bull/bear) to get position return.
         const priceReturn = Number((((current - entry) / entry) * 100).toFixed(1))
         return {
           symbol: inputSymbol,
+          from,
           resolvedSymbol: symbol,
           currency: quote?.currency || 'USD',
           entry,
@@ -375,7 +401,7 @@ async function loadCardData(items) {
           priceReturn,
         }
       } catch {
-        return { symbol: inputSymbol, error: true }
+        return { symbol: inputSymbol, from, error: true }
       }
     }),
   )

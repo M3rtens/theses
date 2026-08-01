@@ -32,7 +32,7 @@ export async function GET() {
   }
 
   // Stored returns: closed theses use their sealed close return; active ones use
-  // the last-persisted live return (refreshed on the owner's visits).
+  // the latest return persisted by the scheduled refresh worker.
   const retOf = makeRetOf(null)
 
   const feed = theses.map((thesis) => ({

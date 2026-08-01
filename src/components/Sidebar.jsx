@@ -2,12 +2,14 @@ import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { loadDrafts } from '../lib/drafts.js'
 import { createClient } from '../lib/supabase/client'
+import { useData } from './DataProvider.jsx'
 import { useUser } from './UserProvider.jsx'
 
 const NAV_MAIN = [
   { view: 'dashboard', icon: 'icon-layout-dashboard', label: 'Dashboard' },
   { view: 'mytheses', icon: 'icon-file-text', label: 'My Theses' },
   { view: 'drafts', icon: 'icon-file-pen', label: 'Drafts' },
+  { view: 'notifications', icon: 'icon-inbox', label: 'Notifications' },
 ]
 
 const NAV_COMMUNITY = [
@@ -19,6 +21,7 @@ const NAV_COMMUNITY = [
 export default function Sidebar({ view, navigate }) {
   const navClass = (target) => `nav-item ${view === target ? 'active' : ''} cursor-pointer flex items-center gap-2.5 py-1`
   const user = useUser()
+  const { stored, scheduled, notifications } = useData()
   const router = useRouter()
   const [mobileOpen, setMobileOpen] = useState(false)
 
@@ -46,28 +49,22 @@ export default function Sidebar({ view, navigate }) {
   }, [mobileOpen])
 
   // Owner-scoped workspace data is never requested for guests.
-  const [stored, setStored] = useState([])
   const [draftCount, setDraftCount] = useState(0)
   useEffect(() => {
     if (!user?.id) {
-      setStored([])
       setDraftCount(0)
       return
     }
-
-    let cancelled = false
-    fetch('/api/theses')
-      .then((response) => (response.ok ? response.json() : []))
-      .then((rows) => {
-        if (!cancelled && Array.isArray(rows)) setStored(rows)
-      })
-      .catch(() => { /* store unavailable */ })
-    setDraftCount(loadDrafts(user.id).length)
-    return () => { cancelled = true }
-  }, [view, user?.id])
+    setDraftCount(loadDrafts(user.id).length + scheduled.length)
+  }, [view, user?.id, scheduled.length])
 
   const allTheses = useMemo(() => stored, [stored])
-  const counts = { mytheses: allTheses.length, drafts: draftCount }
+  const unreadCount = notifications.filter((notification) => !notification.readAt).length
+  const counts = {
+    mytheses: allTheses.length,
+    drafts: draftCount,
+    notifications: unreadCount,
+  }
   const alertCount = useMemo(() => allTheses.reduce((count, thesis) => (
     thesis.status === 'closed'
       ? count

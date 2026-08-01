@@ -18,9 +18,10 @@ import MyTheses from './views/MyTheses.jsx'
 import Drafts from './views/Drafts.jsx'
 import Triggers from './views/Triggers.jsx'
 import Discover from './views/Discover.jsx'
+import Notifications from './views/Notifications.jsx'
 import { fmtPrice } from './lib/format.js'
 
-const PROTECTED_VIEWS = new Set(['dashboard', 'editor', 'profile', 'mytheses', 'drafts', 'triggers'])
+const PROTECTED_VIEWS = new Set(['dashboard', 'editor', 'profile', 'mytheses', 'drafts', 'triggers', 'notifications'])
 
 export default function App() {
   const user = useUser()
@@ -115,24 +116,38 @@ export default function App() {
   const confirmPublish = async () => {
     if (!user || !pendingDraft || publishing) return
     setPublishing(true)
-    showToast('Publishing · locking entry price from exchange feed…')
+    const scheduled = Boolean(pendingDraft.scheduledPublicationDate)
+    const scheduledId = pendingDraft.scheduledPublicationId
+    showToast(scheduled ? 'Saving publication schedule…' : 'Publishing · locking entry price from exchange feed…')
     try {
-      const res = await fetch('/api/theses', {
-        method: 'POST',
+      const endpoint = scheduledId
+        ? scheduled
+          ? `/api/scheduled-publications/${scheduledId}`
+          : `/api/scheduled-publications/${scheduledId}/publish-now`
+        : scheduled
+          ? '/api/scheduled-publications'
+          : '/api/theses'
+      const requestBody = scheduledId && scheduled
+        ? { action: 'update', thesis: pendingDraft }
+        : pendingDraft
+      const res = await fetch(endpoint, {
+        method: scheduledId && scheduled ? 'PATCH' : 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(pendingDraft),
+        body: JSON.stringify(requestBody),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`)
-      // Published successfully — remove the originating draft, if any, so it no
-      // longer shows in Drafts.
       if (pendingDraft.draftId) deleteDraft(pendingDraft.draftId, user?.id)
       setPublishOpen(false)
       setPendingDraft(null)
-      // Pull the new thesis into the cache so every view reflects it.
       refresh()
-      showToast(`Thesis published. Entry locked at ${fmtPrice(data.entry, data.currency)} · Timestamp sealed.`)
-      setTimeout(() => navigate('mytheses'), 800)
+      if (scheduled) {
+        showToast(`Publication scheduled for ${pendingDraft.scheduledPublicationDate}. You can edit or cancel it until processing begins.`)
+        setTimeout(() => navigate('drafts'), 500)
+      } else {
+        showToast(`Thesis published. Entry locked at ${fmtPrice(data.entry, data.currency)} · Timestamp sealed.`)
+        setTimeout(() => navigate('mytheses'), 800)
+      }
     } catch (e) {
       showToast(`Publish failed: ${e.message}`)
     } finally {
@@ -150,6 +165,7 @@ export default function App() {
       case 'mytheses': return <MyTheses navigate={navigate} />
       case 'drafts': return <Drafts navigate={navigate} />
       case 'triggers': return <Triggers navigate={navigate} />
+      case 'notifications': return <Notifications navigate={navigate} />
       case 'discover': return <Discover navigate={navigate} />
       default: return <Dashboard navigate={navigate} />
     }

@@ -80,7 +80,7 @@ export default function MyTheses({ navigate }) {
                 </tr>
               )}
               {visible.map(t => {
-                const l = live[t.ticker]
+                const l = live[t.id]
                 // A user-published thesis stores its entry sealed in native currency;
                 // never let the live fetch overwrite it (its recomputed entry would
                 // flicker the cell). Samples carry no native entry, so use the live one.

@@ -18,6 +18,7 @@ export const REQUEST_LIMITS = {
   update: 16_000,
   lifecycle: 4_000,
   cards: 64_000,
+  notifications: 8_000,
 }
 
 export class RequestValidationError extends Error {
@@ -250,7 +251,7 @@ export function cleanWorkbookModel(value) {
 }
 
 export function validateThesisPayload(body) {
-  assertAllowedKeys(body, new Set(['title', 'ticker', 'company', 'sector', 'side', 'body', 'triggers', 'model', 'scheduledPublicationDate', 'draftId']), 'thesis')
+  assertAllowedKeys(body, new Set(['title', 'ticker', 'company', 'sector', 'side', 'body', 'triggers', 'model', 'scheduledPublicationDate', 'draftId', 'scheduledPublicationId']), 'thesis')
   const side = cleanString(body.side, { label: 'side', max: 8, required: true }).toLowerCase()
   if (!SIDES.has(side)) fail('side must be "bull" or "bear"')
 
@@ -266,6 +267,24 @@ export function validateThesisPayload(body) {
     body: sanitizeThesisHtml(html),
     triggers: cleanTriggers(body.triggers),
     model: cleanWorkbookModel(body.model),
+  }
+}
+
+export function validateScheduledPublicationPayload(body) {
+  if (!isPlainObject(body)) fail('scheduled publication must be an object')
+  const scheduledDate = String(body.scheduledPublicationDate || '')
+  if (!isCalendarDate(scheduledDate)) {
+    fail('scheduledPublicationDate must be a real calendar date in YYYY-MM-DD format')
+  }
+  const earliestExchangeDate = new Date(Date.now() - 86400000).toISOString().slice(0, 10)
+  const maximum = `${new Date().getUTCFullYear() + 5}-12-31`
+  // The database performs the authoritative comparison in the resolved
+  // exchange timezone. Permit the adjacent UTC date at the API boundary.
+  if (scheduledDate < earliestExchangeDate) fail('scheduledPublicationDate cannot be in the past')
+  if (scheduledDate > maximum) fail('scheduledPublicationDate is outside the supported range')
+  return {
+    thesis: validateThesisPayload(body),
+    scheduledDate,
   }
 }
 
@@ -285,8 +304,23 @@ export function validateLifecyclePayload(body) {
   const closeDate = String(body.closeDate || '')
   if (!isCalendarDate(closeDate)) fail('closeDate must be a real calendar date in YYYY-MM-DD format')
   const today = new Date().toISOString().slice(0, 10)
-  if (closeDate <= today) fail('closeDate must be in the future')
+  // Exchange time may still be on the previous calendar day. The scheduling
+  // RPC performs the exact future-date check after resolving the exchange.
+  if (closeDate < today) fail('closeDate must be in the future')
   return { action, closeDate }
+}
+
+export function validateNotificationReadPayload(body) {
+  assertAllowedKeys(body, new Set(['ids', 'all']), 'notification request')
+  if (body.all === true) return { all: true, ids: [] }
+  if (!Array.isArray(body.ids) || !body.ids.length) fail('ids or all=true is required')
+  if (body.ids.length > 100) fail('no more than 100 notification ids are allowed')
+  const ids = [...new Set(body.ids.map((value) => {
+    const id = Number(value)
+    if (!Number.isSafeInteger(id) || id <= 0) fail('notification ids must be positive integers')
+    return id
+  }))]
+  return { all: false, ids }
 }
 
 export function validateCardItems(body) {

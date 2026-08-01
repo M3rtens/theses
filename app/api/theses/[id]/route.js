@@ -59,11 +59,17 @@ export async function PATCH(request, { params }) {
       return NextResponse.json({ error: 'a close date is already sealed and cannot be changed' }, { status: 409 })
     }
     try {
-      const saved = await scheduleThesisClose(id, body.closeDate)
+      const { getSchedulingMetadata } = await import('../../../../src/lib/yahoo.js')
+      const market = await getSchedulingMetadata(thesis.resolvedSymbol || thesis.ticker)
+      const saved = await scheduleThesisClose(id, body.closeDate, market)
       if (!saved) return NextResponse.json({ error: 'thesis not found' }, { status: 404 })
       return NextResponse.json(saved)
     } catch (e) {
-      return NextResponse.json({ error: e.message }, { status: errorStatus(e) })
+      if (!Number.isInteger(e?.status)) console.error('Close-schedule metadata lookup failed', e)
+      return NextResponse.json(
+        { error: Number.isInteger(e?.status) ? e.message : 'could not resolve the exchange schedule' },
+        { status: Number.isInteger(e?.status) ? errorStatus(e) : 502 },
+      )
     }
   }
 

@@ -237,7 +237,7 @@ export default function Profile({ navigate }) {
                 </p>
               )}
               {visibleTheses.map(t => (
-                <ThesisCard key={t.id} thesis={t} variant="profile" live={live[t.ticker]} onOpen={() => navigate('thesis', t)} />
+                <ThesisCard key={t.id} thesis={t} variant="profile" live={live[t.id]} onOpen={() => navigate('thesis', t)} />
               ))}
             </div>
           </div>

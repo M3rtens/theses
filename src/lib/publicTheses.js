@@ -35,6 +35,6 @@ export function hydrateProjectedThesis(row) {
     author: row.author_name || 'Analyst',
     handle: row.author_handle || '',
     authorAvatar: row.author_avatar || '',
+    lastRefreshedAt: row.last_refreshed_at || null,
   }
 }
-

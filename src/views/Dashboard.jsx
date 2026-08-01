@@ -24,7 +24,7 @@ export default function Dashboard({ navigate }) {
   // Portfolio stats computed from the theses themselves: live native-currency
   // position return where available, else the sealed static figure. Return is
   // already side-adjusted (a bear thesis gains when the price falls).
-  const retOf = (t) => live[t.ticker]?.ret ?? t.ret
+  const retOf = (t) => live[t.id]?.ret ?? t.ret
   const returns = allTheses.map(retOf).filter((r) => typeof r === 'number')
   const avgReturn = returns.length ? returns.reduce((a, b) => a + b, 0) / returns.length : 0
   const avgClass = avgReturn >= 0 ? 'ret-pos' : 'ret-neg'
@@ -119,7 +119,7 @@ export default function Dashboard({ navigate }) {
             </div>
             <div className="space-y-3">
               {active.map(t => (
-                <ThesisCard key={`${t.createdAt ? 'u' : 's'}-${t.id}`} thesis={t} variant="dashboard" live={live[t.ticker]} onOpen={() => navigate('thesis', t)} />
+                <ThesisCard key={`${t.createdAt ? 'u' : 's'}-${t.id}`} thesis={t} variant="dashboard" live={live[t.id]} onOpen={() => navigate('thesis', t)} />
               ))}
             </div>
           </div>

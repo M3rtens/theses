@@ -5,9 +5,8 @@ import { errorStatus } from '../../../../src/lib/auth.js'
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
-// POST /api/theses/evaluate -> recompute + persist every stored thesis's
-// financial-trigger statuses against the latest filings, and return the refreshed
-// list (same shape as GET /api/theses). Falls back to the stored list on failure.
+// Compatibility route for older clients. Durable evaluation now runs through
+// the secured background worker, so this returns the currently stored rows.
 export async function POST() {
   try {
     return NextResponse.json(await refreshStoredTriggers())

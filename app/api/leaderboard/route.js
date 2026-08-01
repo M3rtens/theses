@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '../../../src/lib/supabase/server'
-import { refreshStoredTriggers } from '../../../src/lib/evaluateTriggers.js'
 import { makeRetOf, selfStats } from '../../../src/lib/stats.js'
 import { listPublicTheses } from '../../../src/lib/publicThesesStore.js'
 
@@ -15,16 +14,6 @@ export async function GET() {
   const {
     data: { user },
   } = await sessionClient.auth.getUser()
-
-  // Refresh the caller's own theses first (user-scoped), so their row reflects
-  // current prices. Other analysts refresh when they next visit. Non-fatal.
-  if (user) {
-    try {
-      await refreshStoredTriggers()
-    } catch {
-      /* leave stored figures as-is */
-    }
-  }
 
   let publicTheses
   try {
@@ -42,8 +31,8 @@ export async function GET() {
     byUser.set(thesis.ownerId, list)
   }
 
-  // Stored returns: closed theses use their sealed close return; active use the
-  // last-persisted live return (refreshed on the owner's visits).
+  // Stored returns: closed theses use their sealed close return; active ones use
+  // the latest return persisted by the scheduled refresh worker.
   const retOf = makeRetOf(null)
 
   const board = [...byUser.entries()]

@@ -163,17 +163,29 @@ export async function appendUpdate(id, text) {
   return update
 }
 
-export async function scheduleThesisClose(id, closeDate) {
+export async function scheduleThesisClose(id, closeDate, market = {}) {
   const { user } = await ctx()
   const admin = createAdminClient()
   const normalizedId = thesisId(id)
-  const { data, error } = await admin.rpc('schedule_thesis_close', {
+  const { data, error } = await admin.rpc('schedule_thesis_close_job', {
     p_thesis_id: normalizedId,
     p_user_id: user.id,
     p_close_date: closeDate,
+    p_resolved_symbol: market.resolvedSymbol,
+    p_exchange: market.exchange,
+    p_exchange_timezone: market.exchangeTimezone,
   })
   if (!error) return hydrateRpc(data, user.id)
-  if (missingRpc(error)) return legacyUpdate(admin, user.id, normalizedId, { closeDate })
+  if (missingRpc(error)) {
+    const legacy = await admin.rpc('schedule_thesis_close', {
+      p_thesis_id: normalizedId,
+      p_user_id: user.id,
+      p_close_date: closeDate,
+    })
+    if (!legacy.error) return hydrateRpc(legacy.data, user.id)
+    if (missingRpc(legacy.error)) return legacyUpdate(admin, user.id, normalizedId, { closeDate })
+    throwStoreError(legacy.error)
+  }
   throwStoreError(error)
 }
 

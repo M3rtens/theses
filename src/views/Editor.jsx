@@ -90,6 +90,7 @@ export default function Editor({ draft = null, navigate, showToast, onOpenPublis
   const [slashIndex, setSlashIndex] = useState(0)
   const [dragging, setDragging] = useState(false)
   const [draftId, setDraftId] = useState(draft?.id || null)
+  const scheduledPublicationId = draft?.scheduledPublicationId || null
   const [security, setSecurity] = useState(() => {
     if (draft) {
       return draft.ticker && draft.ticker !== '—'
@@ -106,10 +107,14 @@ export default function Editor({ draft = null, navigate, showToast, onOpenPublis
   const [stmtPeriod, setStmtPeriod] = useState('annual')  // annual | quarterly
   const [model, setModel] = useState(draft?.model || null)
   const [useFuturePublication, setUseFuturePublication] = useState(Boolean(draft?.scheduledPublicationDate))
-  const [scheduledPublicationDate, setScheduledPublicationDate] = useState(draft?.scheduledPublicationDate || localDateValue())
+  const [scheduledPublicationDate, setScheduledPublicationDate] = useState(
+    draft?.scheduledPublicationDate || draft?.lastScheduledPublicationDate || localDateValue(),
+  )
   const [publicationCalendarOpen, setPublicationCalendarOpen] = useState(false)
   const [publicationCalendarMonth, setPublicationCalendarMonth] = useState(() => {
-    const selected = dateFromValue(draft?.scheduledPublicationDate || localDateValue())
+    const selected = dateFromValue(
+      draft?.scheduledPublicationDate || draft?.lastScheduledPublicationDate || localDateValue(),
+    )
     return new Date(selected.getFullYear(), selected.getMonth(), 1)
   })
 
@@ -238,7 +243,11 @@ export default function Editor({ draft = null, navigate, showToast, onOpenPublis
     }
     // Carry the draft id (if this thesis was saved as a draft) so it can be
     // removed once publishing succeeds. The create API ignores this field.
-    onOpenPublish({ ...draft, draftId })
+    onOpenPublish({
+      ...draft,
+      draftId: scheduledPublicationId ? null : draftId,
+      scheduledPublicationId,
+    })
   }
 
   // Seed the contenteditable body once on mount. New theses begin blank.
@@ -426,12 +435,34 @@ export default function Editor({ draft = null, navigate, showToast, onOpenPublis
   // The composer emits the fully structured trigger; merge it back, keeping id.
   const updateTriggerFromComposer = (id, structured) => setTriggers(prev => prev.map(t => t.id === id ? { ...structured, id } : t))
 
-  const saveDraft = () => {
+  const saveDraft = async () => {
     const built = buildThesis()
     if (!built.title && !built.ticker) {
       showToast('Add a title or select a security before saving.')
       return
     }
+    if (scheduledPublicationId) {
+      const thesis = useFuturePublication
+        ? built
+        : { ...built, scheduledPublicationDate }
+      try {
+        const response = await fetch(`/api/scheduled-publications/${scheduledPublicationId}`, {
+          method: 'PATCH',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            action: useFuturePublication ? 'update' : 'save-draft',
+            thesis,
+          }),
+        })
+        const saved = await response.json()
+        if (!response.ok) throw new Error(saved?.error || `HTTP ${response.status}`)
+        showToast(useFuturePublication ? 'Scheduled publication updated.' : 'Private server draft saved.')
+      } catch (error) {
+        showToast(`Could not save scheduled draft: ${error.message}`)
+      }
+      return
+    }
+
     const saved = persistDraft(built, draftId, user?.id)
     if (!saved) {
       showToast('Could not save draft — local storage is unavailable.')

@@ -10,7 +10,7 @@ export function makeRetOf(live) {
   return (t) =>
     t.status === 'closed'
       ? Number(t.closeReturn ?? t.ret ?? 0)
-      : Number(live?.[t.ticker]?.ret ?? t.ret ?? 0)
+      : Number(live?.[t.id]?.ret ?? live?.[t.ticker]?.ret ?? t.ret ?? 0)
 }
 
 // The stats block for the user's own row, matching a leaderboard row's shape.

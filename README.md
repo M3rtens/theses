@@ -16,9 +16,10 @@ The main product workflow is implemented:
 2. Sign in with email/password or Google to access the private workspace.
 3. Search for a security and inspect its current price and financial statements.
 4. Write a bull or bear thesis, define invalidation triggers, and optionally attach a spreadsheet model.
-5. Save the work as a browser-local draft or publish it.
+5. Save the work as a browser-local draft, schedule it privately, or publish it immediately.
 6. On publication, seal the entry price and timestamp on the server.
-7. Track returns, trigger status, updates, and the eventual closing price.
+7. Track returns and trigger status through a 15-minute background refresh.
+8. Close immediately or seal a future close date for automatic execution.
 
 This is still a prototype rather than a production-ready service. See [Known limitations](#known-limitations) for the features that are represented in the interface but are not yet fully implemented.
 
@@ -57,6 +58,9 @@ This is still a prototype rather than a production-ready service. See [Known lim
 - Server-timestamped update log for post-publication commentary.
 - One-way manual close that seals the closing price and side-adjusted return.
 - One-time future close-date selection that cannot be changed after it is stored.
+- Durable, owner-only scheduled publications that remain editable or cancellable until processing begins.
+- Exchange-timezone-aware publication and closing workers that require a fresh regular-session quote.
+- Leased, idempotent lifecycle jobs with bounded retries and an action-required state.
 - Row-locked database functions make updates and lifecycle transitions atomic.
 - No API or interface for deleting an individual published thesis.
 
@@ -69,6 +73,8 @@ This is still a prototype rather than a production-ready service. See [Known lim
 - Clear, warning, and breached states.
 - Warning state when a reported figure is within 5% of a threshold.
 - Server-side re-evaluation against the latest available financial statements.
+- Scheduled re-evaluation every 15 minutes for every active thesis, independent of page visits.
+- In-app notifications when trigger states change.
 
 ### Market data and analytics
 
@@ -86,6 +92,7 @@ This is still a prototype rather than a production-ready service. See [Known lim
 - Database-wide analyst leaderboard.
 - Search, sorting, and filtering controls.
 - Public profile identity joined from the `profiles` table.
+- Owner-only lifecycle notifications with unread counts and retry actions for failed automation.
 - Least-privilege `published_theses` view that exposes an explicit public field projection instead of the underlying thesis JSON document.
 
 ### Spreadsheet modeler
@@ -147,9 +154,10 @@ Create `.env.local` in the repository root:
 NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
 SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+LIFECYCLE_WORKER_SECRET=replace-with-a-long-random-secret
 ```
 
-`NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` are used by browser and server Supabase clients, including anonymous reads from the restricted public thesis view. `SUPABASE_SERVICE_ROLE_KEY` is used only on the server for account deletion and controlled thesis mutations. It must never be exposed to browser code or committed to Git.
+`NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` are used by browser and server Supabase clients, including anonymous reads from the restricted public thesis view. `SUPABASE_SERVICE_ROLE_KEY` is used only on the server for account deletion and controlled thesis mutations. `LIFECYCLE_WORKER_SECRET` authenticates calls from Supabase Cron to the two internal worker routes and should be a cryptographically random value of at least 16 characters. Neither secret may be exposed to browser code or committed to Git.
 
 ### 3. Configure Supabase Auth
 
@@ -185,7 +193,7 @@ The resulting data contract is:
 - `theses.user_id` and `profiles.id` reference `auth.users.id`.
 - Account deletion cascades from `auth.users` to associated application data.
 
-The base migration creates the tables and owner-scoped policies. The core-integrity migration then adds the version counter and indexes, immutable-field trigger, restricted public view, service-only atomic mutation functions, and final thesis privileges. The application has a temporary compatibility fallback for an unmigrated development database, but production should not rely on it.
+The base migration creates the tables and owner-scoped policies. The core-integrity migration then adds the version counter and indexes, immutable-field trigger, restricted public view, service-only atomic mutation functions, and final thesis privileges. The automated-lifecycle migration adds private lifecycle jobs, notifications, refresh leases, automatic publication/closing functions, and the 15-minute monitoring contract. The application has a temporary compatibility fallback for an unmigrated development database, but production should not rely on it.
 
 If the Supabase CLI is configured for your project, migrations can be applied with:
 
@@ -195,7 +203,18 @@ supabase db push
 
 Review the migrations in a staging project and back up production data before applying them. They preserve the JSONB storage contract, but the integrity migration replaces existing policies on the app-owned `profiles` and `theses` tables and changes thesis write privileges.
 
-### 5. Start the application
+### 5. Enable lifecycle scheduling
+
+Deploy the application with `LIFECYCLE_WORKER_SECRET` configured, then create two Supabase Vault secrets:
+
+- `theses_app_url`: the deployed application origin, without a trailing slash.
+- `theses_worker_secret`: the exact value of `LIFECYCLE_WORKER_SECRET`.
+
+Run `supabase/cron/setup_lifecycle.sql` in the Supabase SQL Editor. It enables `pg_cron` and `pg_net`, verifies the Vault entries, calls the lifecycle route every minute, and calls the active-thesis refresh route every 15 minutes. Leases in Postgres make overlapping invocations safe.
+
+The setup script is intentionally separate from the migrations: the HTTP jobs should only be enabled after the matching application routes have been deployed. The script also includes verification, HTTP-result inspection, and removal queries as comments.
+
+### 6. Start the application
 
 ```bash
 npm run dev
@@ -272,6 +291,9 @@ supabase/migrations/           Versioned database integrity migrations
 
 - Published theses are stored as complete objects in `theses.data` (`jsonb`).
 - The relational row stores ownership, creation time, a version counter, and a mirrored lifecycle status.
+- Private scheduled publications and automatic closes are coordinated through leased `lifecycle_jobs` rows.
+- Active theses have leased refresh metadata so multiple worker invocations cannot update the same row concurrently.
+- Notifications are owner-scoped rows with idempotent event keys and read timestamps.
 - A database trigger seals publication fields; row-locked service functions can change only lifecycle, update-log, market, and trigger-status fields.
 - Anonymous community reads use the explicit `published_theses` projection rather than the complete JSON document.
 - Public profile identity is stored in `profiles`.
@@ -287,7 +309,14 @@ supabase/migrations/           Versioned database integrity migrations
 | `/api/theses` | `POST` | Publish a thesis and seal its market entry. |
 | `/api/theses/[id]` | `PATCH` | Schedule a close date or close a thesis immediately. |
 | `/api/theses/[id]/updates` | `POST` | Append a server-timestamped update. |
-| `/api/theses/evaluate` | `POST` | Refresh active returns and trigger statuses. |
+| `/api/theses/evaluate` | `POST` | Compatibility read endpoint; scheduled workers own durable refreshes. |
+| `/api/scheduled-publications` | `GET`, `POST` | List or create owner-only scheduled publications. |
+| `/api/scheduled-publications/[id]` | `PATCH`, `DELETE` | Edit, cancel, retry, or delete an unpublished scheduled record. |
+| `/api/scheduled-publications/[id]/publish-now` | `POST` | Publish a scheduled/private server draft immediately. |
+| `/api/notifications` | `GET`, `PATCH` | List owner notifications or mark them read. |
+| `/api/lifecycle-jobs/[id]/retry` | `POST` | Retry an action-required publication or close job. |
+| `/api/internal/lifecycle` | `POST` | Authenticated Cron worker for scheduled publication and closing. |
+| `/api/internal/refresh` | `POST` | Authenticated Cron worker for 15-minute return and trigger refreshes. |
 | `/api/discover` | `GET` | Return the public community thesis feed. |
 | `/api/leaderboard` | `GET` | Compute database-wide analyst rankings. |
 | `/api/search` | `GET` | Search Yahoo Finance securities. |
@@ -309,9 +338,10 @@ It uses the standard Next.js build settings and requires these environment varia
 NEXT_PUBLIC_SUPABASE_URL
 NEXT_PUBLIC_SUPABASE_ANON_KEY
 SUPABASE_SERVICE_ROLE_KEY
+LIFECYCLE_WORKER_SECRET
 ```
 
-`SUPABASE_SERVICE_ROLE_KEY` must be configured as a sensitive, server-only variable.
+`SUPABASE_SERVICE_ROLE_KEY` and `LIFECYCLE_WORKER_SECRET` must be configured as sensitive, server-only variables.
 
 Supabase Auth is configured with:
 
@@ -331,6 +361,7 @@ To create another deployment:
 3. Deploy using the default Next.js build settings.
 4. Update the Supabase Site URL and redirect allow list to match the new production domain.
 5. Add preview-domain redirect patterns if authentication should work on Vercel preview deployments.
+6. Create the two lifecycle Vault secrets and run `supabase/cron/setup_lifecycle.sql` after the production routes are live.
 
 Before deploying elsewhere, confirm that the host supports the Node.js runtime used by the Yahoo Finance and Supabase route handlers.
 
@@ -341,8 +372,8 @@ Before deploying elsewhere, confirm that the host supports the Node.js runtime u
 - Dropping a Word document currently displays import progress messages but does not parse or insert the document.
 - The rich-text editor uses browser `contentEditable` and `document.execCommand`; it is not backed by Tiptap or another structured editor framework.
 - The editor's embedded-chart command inserts a placeholder block, and the Charts tab does not yet contain a chart builder.
-- A selected future publication date is saved with a draft, but the publish API currently publishes immediately and does not run a publication scheduler.
-- A future close date can be sealed, but there is no background job that automatically closes the thesis when that date arrives.
+- Lifecycle automation depends on the separately configured Supabase Cron jobs; applying the migration alone does not start the workers.
+- Notifications are in-app only and are polled once per minute; email and push delivery are not implemented.
 - Market data is dependent on Yahoo Finance availability and is polled rather than streamed.
 - Public request limiting is process-local; configure a shared deployment-edge limit for multi-instance production enforcement.
 - The profile's joined date, location, and verification label are currently static presentation copy.
