@@ -73,6 +73,7 @@ export async function POST(request) {
     resolvedSymbol: lock.resolvedSymbol,
     exchange: lock.exchange,
     body: body.body,
+    citations: body.citations,
     // The financial model built in the editor's spreadsheet. Sealed with the
     // thesis so it renders read-only on the published page, like the entry price.
     model: body.model,

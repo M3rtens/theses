@@ -13,6 +13,7 @@ import {
 import SpreadsheetEditor from '../components/SpreadsheetEditor.jsx'
 import ThesisEditor from '../components/ThesisEditor.jsx'
 import ChartBuilder from '../components/ChartBuilder.jsx'
+import CitationManager from '../components/CitationManager.jsx'
 import { latestMetric, formatMetricValue, triggerLabel, evaluateTrigger, comparisonsOf } from '../lib/triggers.js'
 import TriggerComposer from '../components/TriggerComposer.jsx'
 
@@ -123,6 +124,7 @@ export default function Editor({ draft = null, navigate, showToast, onOpenPublis
   const [stmtPeriod, setStmtPeriod] = useState('annual')  // annual | quarterly
   const [model, setModel] = useState(draft?.model || null)
   const [charts, setCharts] = useState(() => Array.isArray(draft?.model?.charts) ? draft.model.charts : [])
+  const [citations, setCitations] = useState(() => Array.isArray(draft?.citations) ? draft.citations : [])
   const [modelSelection, setModelSelection] = useState(null)
   const [useFuturePublication, setUseFuturePublication] = useState(Boolean(draft?.scheduledPublicationDate))
   const [scheduledPublicationDate, setScheduledPublicationDate] = useState(
@@ -257,6 +259,7 @@ export default function Editor({ draft = null, navigate, showToast, onOpenPublis
     sector: sectorRef.current?.value || '',
     side,
     body: thesisEditorRef.current?.getHTML() || '',
+    citations,
     triggers: triggers.map(toStoredTrigger),
     model: model || charts.length ? { ...(model || { filename: 'model.xlsx', sheets: [] }), charts } : null,
     scheduledPublicationDate: useFuturePublication ? scheduledPublicationDate : null,
@@ -538,6 +541,11 @@ export default function Editor({ draft = null, navigate, showToast, onOpenPublis
   const bearTextColor = side === 'bear' ? 'var(--bear)' : 'var(--ink-soft)'
 
   const tabHidden = (tab) => activeTab === tab ? '' : 'hidden'
+  const updateCitations = (next) => {
+    setCitations(next)
+    thesisEditorRef.current?.syncCitations(next)
+    markDirty()
+  }
   const saveStatusText = {
     idle: 'Autosave ready',
     saving: 'Saving…',
@@ -800,7 +808,7 @@ export default function Editor({ draft = null, navigate, showToast, onOpenPublis
         </div>
 
         <div className="border-b mb-6 flex items-center gap-1 overflow-x-auto" style={{ borderColor: 'var(--border)' }}>
-          {['thesis', 'model', 'financials', 'charts'].map(tab => (
+          {['thesis', 'model', 'financials', 'charts', 'sources'].map(tab => (
             <button key={tab} className={`tab-btn ${activeTab === tab ? 'active' : ''}`} onClick={() => setActiveTab(tab)}>
               {tab.charAt(0).toUpperCase() + tab.slice(1)}
             </button>
@@ -826,6 +834,7 @@ export default function Editor({ draft = null, navigate, showToast, onOpenPublis
             documentInputRef={documentInputRef}
             showToast={showToast}
             onOpenCharts={() => setActiveTab('charts')}
+            onOpenSources={() => setActiveTab('sources')}
           />
         </div>
 
@@ -965,6 +974,20 @@ export default function Editor({ draft = null, navigate, showToast, onOpenPublis
               if (thesisEditorRef.current?.insertChart(chart)) {
                 setActiveTab('thesis')
                 showToast('Chart inserted into the thesis.')
+              }
+            }}
+          />
+        </div>
+
+        <div className={tabHidden('sources')}>
+          <CitationManager
+            citations={citations}
+            showToast={showToast}
+            onChange={updateCitations}
+            onInsert={(citation, label) => {
+              if (thesisEditorRef.current?.insertCitation(citation, label)) {
+                setActiveTab('thesis')
+                showToast(`Citation [${label}] inserted.`)
               }
             }}
           />

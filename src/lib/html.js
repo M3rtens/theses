@@ -14,13 +14,14 @@ const EMBED_CLASSES = [
   'mt-1',
   'text-xs',
   'thesis-chart-placeholder',
+  'thesis-citation',
 ]
 
 export function sanitizeThesisHtml(value) {
   return sanitizeHtml(String(value || ''), {
     allowedTags: [
       'p', 'br', 'h1', 'h2', 'h3', 'strong', 'b', 'em', 'i', 'u', 's',
-      'strike', 'blockquote', 'ul', 'ol', 'li', 'a', 'hr', 'div', 'span',
+      'strike', 'blockquote', 'ul', 'ol', 'li', 'a', 'hr', 'div', 'span', 'sup',
     ],
     allowedAttributes: {
       a: ['href', 'target', 'rel'],
@@ -29,10 +30,12 @@ export function sanitizeThesisHtml(value) {
         'data-thesis-chart-title', 'data-thesis-chart-type',
       ],
       span: ['class'],
+      sup: ['class', 'data-thesis-citation-id', 'data-thesis-citation-label'],
     },
     allowedClasses: {
       div: EMBED_CLASSES,
       span: EMBED_CLASSES,
+      sup: EMBED_CLASSES,
     },
     allowedSchemes: ['http', 'https', 'mailto', 'tel'],
     allowProtocolRelative: false,

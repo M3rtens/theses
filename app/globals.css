@@ -193,6 +193,9 @@ body.mobile-menu-open { overflow: hidden; }
 .editor-content .thesis-chart-placeholder { border-color: var(--border); background: var(--bg-warm); font-family: Inter, system-ui, sans-serif; cursor: default; }
 .editor-content .thesis-chart-placeholder > :first-child { color: var(--muted); }
 .editor-content .thesis-chart-placeholder > :last-child { color: var(--ink-soft); }
+.editor-content .thesis-citation { margin-inline: 0.08em; font-family: 'JetBrains Mono', monospace; font-size: 0.7em; font-weight: 600; line-height: 0; vertical-align: super; }
+.editor-content .thesis-citation a { color: var(--bull); text-decoration: none; }
+.editor-content .thesis-citation a:hover { text-decoration: underline; }
 
 .chart-builder { display: grid; grid-template-columns: minmax(160px, 220px) minmax(0, 1fr); min-height: 520px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); overflow: hidden; }
 .chart-builder-list { border-right: 1px solid var(--border); background: var(--bg-warm); padding: 8px; }

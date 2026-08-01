@@ -14,6 +14,7 @@ const COMMANDS = [
   { action: 'orderedList', icon: <i className="icon-list-ordered text-xs"></i>, label: 'Numbered List', desc: 'Ordered items' },
   { action: 'divider', icon: <i className="icon-minus text-xs"></i>, label: 'Divider', desc: 'Separate sections' },
   { action: 'embed', icon: <i className="icon-chart-no-axes-column text-xs"></i>, label: 'Embed Chart', desc: 'Financials, charts, models' },
+  { action: 'citation', icon: <i className="icon-book-open text-xs"></i>, label: 'Add Citation', desc: 'Insert a numbered source reference' },
 ]
 
 function ToolbarButton({ active = false, disabled = false, label, onClick, children }) {
@@ -41,6 +42,7 @@ const ThesisEditor = forwardRef(function ThesisEditor({
   documentInputRef,
   showToast,
   onOpenCharts,
+  onOpenSources,
 }, ref) {
   const onChangeRef = useRef(onChange)
   onChangeRef.current = onChange
@@ -145,6 +147,9 @@ const ThesisEditor = forwardRef(function ThesisEditor({
     else if (action === 'embed') {
       chain.run()
       onOpenCharts?.()
+    } else if (action === 'citation') {
+      chain.run()
+      onOpenSources?.()
     }
   }
 
@@ -194,6 +199,31 @@ const ThesisEditor = forwardRef(function ThesisEditor({
       if (ranges.length) editor.view.dispatch(transaction)
       return Boolean(ranges.length)
     },
+    insertCitation: (citation, label) => {
+      if (!editor || !citation?.id) return false
+      editor.chain().focus().insertContent({
+        type: 'citationReference',
+        attrs: { citationId: citation.id, label: String(label) },
+      }).run()
+      return true
+    },
+    syncCitations: (citations) => {
+      if (!editor) return false
+      const labels = new Map((citations || []).map((citation, index) => [citation.id, String(index + 1)]))
+      const nodes = []
+      editor.state.doc.descendants((node, pos) => {
+        if (node.type.name === 'citationReference') nodes.push({ node, pos })
+      })
+      if (!nodes.length) return false
+      const transaction = editor.state.tr
+      nodes.reverse().forEach(({ node, pos }) => {
+        const label = labels.get(node.attrs.citationId)
+        if (!label) transaction.delete(pos, pos + node.nodeSize)
+        else if (node.attrs.label !== label) transaction.setNodeMarkup(pos, undefined, { ...node.attrs, label })
+      })
+      if (transaction.docChanged) editor.view.dispatch(transaction)
+      return transaction.docChanged
+    },
   }), [editor])
 
   const handleKeyDown = (event) => {
@@ -233,6 +263,7 @@ const ThesisEditor = forwardRef(function ThesisEditor({
         <ToolbarButton label="Link" active={editor?.isActive('link')} onClick={editLink}><i className="icon-link"></i></ToolbarButton>
         <ToolbarButton label="Divider" onClick={() => editor?.chain().focus().setHorizontalRule().run()}><i className="icon-minus"></i></ToolbarButton>
         <ToolbarButton label="Embed chart" onClick={() => onOpenCharts?.()}><i className="icon-chart-no-axes-column"></i></ToolbarButton>
+        <ToolbarButton label="Add citation" onClick={() => onOpenSources?.()}><i className="icon-book-open"></i></ToolbarButton>
         <button type="button" className="editor-command-hint hidden sm:block ml-auto" onMouseDown={(event) => event.preventDefault()} onClick={() => editor?.chain().focus().insertContent('/').run()}>
           Type <kbd>/</kbd> for commands
         </button>

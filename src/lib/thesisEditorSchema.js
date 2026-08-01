@@ -49,6 +49,39 @@ export const ChartPlaceholder = Node.create({
   },
 })
 
+export const CitationReference = Node.create({
+  name: 'citationReference',
+  group: 'inline',
+  inline: true,
+  atom: true,
+  selectable: true,
+
+  addAttributes() {
+    return {
+      citationId: { default: null, parseHTML: (element) => element.getAttribute('data-thesis-citation-id') },
+      label: { default: '1', parseHTML: (element) => element.getAttribute('data-thesis-citation-label') || String(element.textContent || '').replace(/\D/g, '') || '1' },
+    }
+  },
+
+  parseHTML() {
+    return [{ tag: 'sup[data-thesis-citation-id]' }]
+  },
+
+  renderHTML({ node }) {
+    const { citationId, label } = node.attrs
+    return [
+      'sup',
+      {
+        class: 'thesis-citation',
+        'data-thesis-citation-id': citationId,
+        'data-thesis-citation-label': label,
+        contenteditable: 'false',
+      },
+      ['a', { href: `#reference-${citationId}` }, `[${label}]`],
+    ]
+  },
+})
+
 export function createThesisEditorExtensions() {
   return [
     StarterKit.configure({
@@ -68,5 +101,6 @@ export function createThesisEditorExtensions() {
     }),
     Placeholder.configure({ placeholder: 'Begin your thesis… Type / for commands, or import a DOCX document.' }),
     ChartPlaceholder,
+    CitationReference,
   ]
 }

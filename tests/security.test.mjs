@@ -116,6 +116,12 @@ test('structured editor round-trips existing thesis HTML and legacy chart placeh
   assert.equal(linkedDocument.content[0].attrs.chartId, 'chart-revenue')
   assert.equal(linkedDocument.content[0].attrs.chartType, 'bar')
   assert.match(sanitizeThesisHtml(generateHTML(linkedDocument, extensions)), /data-thesis-chart-id="chart-revenue"/)
+
+  const cited = '<p>Demand increased<sup class="thesis-citation" data-thesis-citation-id="src-demand" data-thesis-citation-label="1"><a href="#reference-src-demand">[1]</a></sup>.</p>'
+  const citedDocument = generateJSON(cited, extensions)
+  const citationNode = citedDocument.content[0].content.find((node) => node.type === 'citationReference')
+  assert.equal(citationNode.attrs.citationId, 'src-demand')
+  assert.match(sanitizeThesisHtml(generateHTML(citedDocument, extensions)), /data-thesis-citation-id="src-demand"/)
 })
 
 test('legacy editor DOM mutation commands have been removed', async () => {
@@ -234,7 +240,16 @@ test('thesis payload validation applies limits, sanitization, and unknown-field 
     company: 'ASML',
     sector: 'Semiconductors',
     side: 'bull',
-    body: '<p onclick="bad()">Thesis</p>',
+    body: '<p onclick="bad()">Thesis<sup class="thesis-citation" data-thesis-citation-id="src-filing" data-thesis-citation-label="1">[1]</sup></p>',
+    citations: [{
+      id: 'src-filing',
+      title: 'Annual report',
+      publisher: 'ASML',
+      author: '',
+      url: 'asml.com/investors',
+      publishedAt: '2026-02-01',
+      accessedAt: '2026-08-02',
+    }],
     triggers: [],
     model: null,
     draftId: 'local-only',
@@ -244,7 +259,17 @@ test('thesis payload validation applies limits, sanitization, and unknown-field 
   })
   assert.equal(clean.title, 'Durable growth')
   assert.equal(clean.ticker, 'ASML.AS')
-  assert.equal(clean.body, '<p>Thesis</p>')
+  assert.match(clean.body, /data-thesis-citation-id="src-filing"/)
+  assert.equal(clean.citations[0].url, 'https://asml.com/investors')
+  assert.throws(() => validateThesisPayload({
+    title: 'Unknown citation', ticker: 'AAPL', side: 'bull',
+    body: '<p>Claim<sup data-thesis-citation-id="src-missing">[1]</sup></p>',
+    citations: [],
+  }), /unknown citation/)
+  assert.throws(() => validateThesisPayload({
+    title: 'Unsafe source', ticker: 'AAPL', side: 'bull', body: '<p>Claim</p>',
+    citations: [{ id: 'src-unsafe', title: 'Unsafe', url: 'javascript:alert(1)' }],
+  }), /safe http or https/)
   assert.throws(() => validateThesisPayload({ title: 'x', ticker: 'AAPL', side: 'bull', unexpected: true }), /unsupported field/)
   assert.throws(() => validateThesisPayload({ title: 'x'.repeat(201), ticker: 'AAPL', side: 'bull' }), /200 characters/)
 })
@@ -553,12 +578,14 @@ test('public thesis projection maps only explicit fields and sanitizes HTML', ()
     body: '<p onclick="bad()">Visible</p><script>bad()</script>',
     author_name: 'Analyst',
     author_slug: 'analyst-550e8400e29b41d4a716446655440000',
+    citations: [{ id: 'src-report', title: 'Report', url: 'https://example.com/report' }],
     private_note: 'must not cross the boundary',
   })
   assert.equal(projected.ownerId, 'user-1')
   assert.equal(projected.current, 110)
   assert.equal(projected.body, '<p>Visible</p>')
   assert.equal(projected.authorSlug, 'analyst-550e8400e29b41d4a716446655440000')
+  assert.equal(projected.citations[0].id, 'src-report')
   assert.equal(Object.hasOwn(projected, 'private_note'), false)
 })
 
@@ -651,6 +678,10 @@ test('core integrity migration seals theses and restricts public reads', async (
     new URL('../supabase/migrations/202608020002_thesis_discussions.sql', import.meta.url),
     'utf8',
   )
+  const citations = await readFile(
+    new URL('../supabase/migrations/202608020003_thesis_citations.sql', import.meta.url),
+    'utf8',
+  )
   const cron = await readFile(
     new URL('../supabase/cron/setup_lifecycle.sql', import.meta.url),
     'utf8',
@@ -733,4 +764,7 @@ test('core integrity migration seals theses and restricts public reads', async (
   assert.match(discussions, /create trigger notify_thesis_discussion/i)
   assert.match(discussions, /discussion_reply/i)
   assert.match(discussions, /comment_reports_reporter_unique/i)
+  assert.match(citations, /create or replace view public\.published_theses/i)
+  assert.match(citations, /t\.data -> 'citations' as citations/i)
+  assert.match(citations, /grant select on public\.published_theses to anon, authenticated, service_role/i)
 })

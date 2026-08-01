@@ -38,6 +38,7 @@ function cloudPayload(draft) {
     sector: draft.sector || '',
     side: draft.side || 'bull',
     body: draft.body || '',
+    citations: draft.citations || [],
     triggers: draft.triggers || [],
     model: draft.model || null,
     scheduledPublicationDate: draft.scheduledPublicationDate || null,

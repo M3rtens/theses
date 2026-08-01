@@ -51,6 +51,7 @@ export const saveDraft = (thesis, id, userId, metadata = {}) => {
     sector: thesis.sector || '',
     side: thesis.side || 'bull',
     body: thesis.body || '',
+    citations: thesis.citations || [],
     triggers: thesis.triggers || [],
     model: thesis.model || null,
     scheduledPublicationDate: thesis.scheduledPublicationDate || null,
@@ -102,6 +103,7 @@ export const hasDraftContent = (draft) => Boolean(
   draft?.title?.trim()
   || draft?.ticker?.trim()
   || draft?.body?.replace(/<[^>]*>/g, '').trim()
+  || draft?.citations?.length
   || draft?.triggers?.length
   || draft?.model,
 )

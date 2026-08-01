@@ -1,6 +1,7 @@
 import { sanitizeThesisHtml } from './html.js'
 import { normalizePublicUrl } from './urls.js'
 import { CHART_TYPES, normalizeChartRange, parseChartRange } from './charts.js'
+import { CITATION_ID, MAX_CITATIONS, citationIdsInHtml, normalizeCitationUrl } from './citations.js'
 
 const textEncoder = new TextEncoder()
 const SYMBOL = /^[A-Z0-9^][A-Z0-9.^=/_-]{0,63}$/
@@ -336,11 +337,54 @@ export function cleanWorkbookModel(value) {
   }
 }
 
+function cleanCitations(value) {
+  if (value == null) return []
+  if (!Array.isArray(value)) fail('citations must be an array')
+  if (value.length > MAX_CITATIONS) fail(`no more than ${MAX_CITATIONS} citations are allowed`)
+  const seen = new Set()
+  return value.map((citation, index) => {
+    if (!isPlainObject(citation)) fail(`citation ${index + 1} must be an object`)
+    assertAllowedKeys(citation, new Set([
+      'id', 'title', 'publisher', 'author', 'url', 'publishedAt', 'accessedAt',
+    ]), `citation ${index + 1}`)
+    const id = String(citation.id || '').toLowerCase()
+    if (!CITATION_ID.test(id)) fail(`citation ${index + 1} has an invalid id`)
+    if (seen.has(id)) fail(`citation ${index + 1} duplicates an existing source`)
+    seen.add(id)
+    const url = normalizeCitationUrl(citation.url)
+    if (!url) fail(`citation ${index + 1} must use a safe http or https URL`)
+    const publishedAt = citation.publishedAt == null || citation.publishedAt === ''
+      ? null
+      : String(citation.publishedAt)
+    const accessedAt = citation.accessedAt == null || citation.accessedAt === ''
+      ? null
+      : String(citation.accessedAt)
+    if (publishedAt && !isCalendarDate(publishedAt)) fail(`citation ${index + 1} publication date must be a real date`)
+    if (accessedAt && !isCalendarDate(accessedAt)) fail(`citation ${index + 1} access date must be a real date`)
+    return {
+      id,
+      title: cleanString(citation.title, { label: `citation ${index + 1} title`, max: 300, required: true }),
+      publisher: cleanString(citation.publisher, { label: `citation ${index + 1} publisher`, max: 160 }),
+      author: cleanString(citation.author, { label: `citation ${index + 1} author`, max: 160 }),
+      url,
+      publishedAt,
+      accessedAt,
+    }
+  })
+}
+
+function assertCitationReferences(html, citations) {
+  const known = new Set(citations.map((citation) => citation.id))
+  for (const id of citationIdsInHtml(html)) {
+    if (!CITATION_ID.test(id) || !known.has(id)) fail('thesis body references an unknown citation')
+  }
+}
+
 export function validateThesisPayload(body) {
   assertAllowedKeys(body, new Set([
     'title', 'ticker', 'company', 'sector', 'side', 'body', 'triggers', 'model',
     'scheduledPublicationDate', 'draftId', 'localDraftId', 'cloudDraftId',
-    'cloudDraftVersion', 'scheduledPublicationId',
+    'cloudDraftVersion', 'scheduledPublicationId', 'citations',
   ]), 'thesis')
   const side = cleanString(body.side, { label: 'side', max: 8, required: true }).toLowerCase()
   if (!SIDES.has(side)) fail('side must be "bull" or "bear"')
@@ -348,13 +392,17 @@ export function validateThesisPayload(body) {
   const html = typeof body.body === 'string' ? body.body : ''
   if (byteLength(html) > 200_000) fail('body is too large', 413)
 
+  const sanitizedBody = sanitizeThesisHtml(html)
+  const citations = cleanCitations(body.citations)
+  assertCitationReferences(sanitizedBody, citations)
   return {
     title: cleanString(body.title, { label: 'title', max: 200, required: true }),
     ticker: normalizeSymbol(body.ticker, 'ticker'),
     company: cleanString(body.company, { label: 'company', max: 200 }),
     sector: cleanString(body.sector, { label: 'sector', max: 100 }),
     side,
-    body: sanitizeThesisHtml(html),
+    body: sanitizedBody,
+    citations,
     triggers: cleanTriggers(body.triggers),
     model: cleanWorkbookModel(body.model),
   }
@@ -374,7 +422,7 @@ export function validateDraftPayload(body) {
   assertAllowedKeys(body, new Set([
     'title', 'ticker', 'company', 'sector', 'side', 'body', 'triggers', 'model',
     'scheduledPublicationDate', 'draftId', 'localDraftId', 'cloudDraftId',
-    'cloudDraftVersion', 'wordCount', 'triggersCount', 'savedAt', 'syncedAt',
+    'cloudDraftVersion', 'wordCount', 'triggersCount', 'savedAt', 'syncedAt', 'citations',
   ]), 'draft')
 
   const html = typeof body.body === 'string' ? body.body : ''
@@ -390,13 +438,17 @@ export function validateDraftPayload(body) {
     fail('scheduledPublicationDate must be a real calendar date in YYYY-MM-DD format')
   }
 
+  const sanitizedBody = sanitizeThesisHtml(html)
+  const citations = cleanCitations(body.citations)
+  assertCitationReferences(sanitizedBody, citations)
   return {
     title: cleanString(body.title, { label: 'title', max: 200 }),
     ticker,
     company: cleanString(body.company, { label: 'company', max: 200 }),
     sector: cleanString(body.sector, { label: 'sector', max: 100 }),
     side: SIDES.has(String(body.side || '').toLowerCase()) ? String(body.side).toLowerCase() : 'bull',
-    body: sanitizeThesisHtml(html),
+    body: sanitizedBody,
+    citations,
     triggers: cleanDraftTriggers(body.triggers),
     model: cleanWorkbookModel(body.model),
     scheduledPublicationDate: scheduledDate,

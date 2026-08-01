@@ -536,7 +536,7 @@ export default function ThesisDetail({ navigate, thesis }) {
         <div className="grid grid-cols-1 xl:grid-cols-4 gap-8">
           <div className="xl:col-span-3 min-w-0">
             {base.body
-              ? <ThesisBody html={base.body} model={base.model} />
+              ? <ThesisBody html={base.body} model={base.model} citations={base.citations} />
               : <article className="font-serif text-[17px] leading-[1.75]" style={{ color: 'var(--ink-soft)' }}>
                   <p>The full thesis text isn’t available for this entry.</p>
                 </article>}
