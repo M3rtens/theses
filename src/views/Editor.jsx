@@ -11,10 +11,10 @@ import {
   saveDraft as persistLocalDraft,
 } from '../lib/drafts.js'
 import SpreadsheetEditor from '../components/SpreadsheetEditor.jsx'
+import ThesisEditor from '../components/ThesisEditor.jsx'
 import { latestMetric, formatMetricValue, triggerLabel, evaluateTrigger, comparisonsOf } from '../lib/triggers.js'
 import TriggerComposer from '../components/TriggerComposer.jsx'
 
-const EMBED_HTML = '<div contenteditable="false" class="my-4 p-4 border rounded" style="border-color: var(--border); background: var(--bg-warm);"><div class="text-[10px] font-mono uppercase tracking-wider" style="color: var(--muted);">Embedded Chart</div><div class="text-sm font-medium mt-1">Revenue &amp; Margin Trajectory</div><div class="text-xs mt-1" style="color: var(--ink-soft);">Linked to model · auto-updates</div></div>'
 const DOCX_MAX_BYTES = 8 * 1024 * 1024
 const DOCX_CONTENT_TYPE = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
 
@@ -30,17 +30,6 @@ const TRIGGER_STATUS_STYLE = {
   warning: { label: 'WARNING', color: 'var(--warn)', soft: 'var(--warn-soft)' },
   clear: { label: 'CLEAR', color: 'var(--bull)', soft: 'var(--bull-soft)' },
 }
-
-const SLASH_ITEMS = [
-  { action: 'h1', icon: <span className="font-serif font-semibold text-xs">H1</span>, label: 'Heading 1', desc: 'Large section heading' },
-  { action: 'h2', icon: <span className="font-serif font-semibold text-xs">H2</span>, label: 'Heading 2', desc: 'Medium heading' },
-  { action: 'p', icon: <span className="text-xs">¶</span>, label: 'Text', desc: 'Plain paragraph' },
-  { action: 'blockquote', icon: <i className="icon-quote text-xs"></i>, label: 'Quote', desc: 'Capture a citation' },
-  { action: 'insertUnorderedList', icon: <i className="icon-list text-xs"></i>, label: 'Bullet List', desc: 'Unordered items' },
-  { action: 'insertOrderedList', icon: <i className="icon-list-ordered text-xs"></i>, label: 'Numbered List', desc: 'Ordered items' },
-  { action: 'divider', icon: <i className="icon-minus text-xs"></i>, label: 'Divider', desc: 'Separate sections' },
-  { action: 'embed', icon: <i className="icon-chart-no-axes-column text-xs"></i>, label: 'Embed Chart', desc: 'Financials, charts, models' },
-]
 
 // Kept only temporarily while the original mockup is retired from the source.
 const showLegacyModel = false
@@ -105,9 +94,6 @@ export default function Editor({ draft = null, navigate, showToast, onOpenPublis
   const [side, setSide] = useState(draft?.side || 'bull')
   const [activeTab, setActiveTab] = useState('thesis')
   const [triggers, setTriggers] = useState(draftTriggers || [])
-  const [slash, setSlash] = useState(null) // { x, y }
-  const [slashQuery, setSlashQuery] = useState('')
-  const [slashIndex, setSlashIndex] = useState(0)
   const [dragging, setDragging] = useState(false)
   const [importingDocument, setImportingDocument] = useState(false)
   const scheduledPublicationId = draft?.scheduledPublicationId || null
@@ -147,8 +133,7 @@ export default function Editor({ draft = null, navigate, showToast, onOpenPublis
     return new Date(selected.getFullYear(), selected.getMonth(), 1)
   })
 
-  const editorRef = useRef(null)
-  const slashRangeRef = useRef(null)
+  const thesisEditorRef = useRef(null)
   const titleRef = useRef(null)
   const sectorRef = useRef(null)
   const dragCounter = useRef(0)
@@ -268,7 +253,7 @@ export default function Editor({ draft = null, navigate, showToast, onOpenPublis
     company: security?.name?.trim() || '',
     sector: sectorRef.current?.value || '',
     side,
-    body: editorRef.current?.innerHTML || '',
+    body: thesisEditorRef.current?.getHTML() || '',
     triggers: triggers.map(toStoredTrigger),
     model,
     scheduledPublicationDate: useFuturePublication ? scheduledPublicationDate : null,
@@ -299,160 +284,6 @@ export default function Editor({ draft = null, navigate, showToast, onOpenPublis
     })
   }
 
-  // Seed the contenteditable body once on mount. New theses begin blank.
-  useEffect(() => {
-    if (editorRef.current) editorRef.current.innerHTML = draft?.body || ''
-    // Mount-only seed: App keys the editor by draft id, so it remounts per draft.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  const format = (command, value = null) => {
-    document.execCommand(command, false, value)
-    editorRef.current?.focus()
-    markDirty()
-  }
-
-  const insertDivider = () => {
-    document.execCommand('insertHorizontalRule')
-    markDirty()
-  }
-  const insertEmbed = () => {
-    document.execCommand('insertHTML', false, EMBED_HTML)
-    markDirty()
-  }
-
-  const focusEditor = () => {
-    const editor = editorRef.current
-    if (!editor) return
-    editor.focus()
-    const selection = window.getSelection()
-    if (selection?.rangeCount && editor.contains(selection.anchorNode)) return
-    const range = document.createRange()
-    range.selectNodeContents(editor)
-    range.collapse(false)
-    selection?.removeAllRanges()
-    selection?.addRange(range)
-  }
-
-  const openSlashCommands = () => {
-    focusEditor()
-    document.execCommand('insertText', false, '/')
-    markDirty()
-    requestAnimationFrame(onEditorInput)
-  }
-
-  const closeSlash = () => {
-    slashRangeRef.current = null
-    setSlash(null)
-    setSlashQuery('')
-    setSlashIndex(0)
-  }
-
-  const onEditorInput = () => {
-    const sel = window.getSelection()
-    if (!sel.rangeCount) return
-    const range = sel.getRangeAt(0)
-
-    if (slashRangeRef.current) {
-      try {
-        const commandRange = document.createRange()
-        commandRange.setStart(slashRangeRef.current.startContainer, slashRangeRef.current.startOffset)
-        commandRange.setEnd(range.startContainer, range.startOffset)
-        const token = commandRange.toString()
-        if (/^\/[^\s/]*$/.test(token)) {
-          setSlashQuery(token.slice(1).toLowerCase())
-          setSlashIndex(0)
-          return
-        }
-      } catch {
-        // The saved range can become invalid when the editor DOM is rewritten.
-      }
-      closeSlash()
-      return
-    }
-
-    const text = range.startContainer.textContent || ''
-    const offset = range.startOffset
-    const lastChar = text.slice(offset - 1, offset)
-    if (lastChar === '/' && !slash) {
-      const rect = range.getBoundingClientRect()
-      const editorRect = editorRef.current?.getBoundingClientRect()
-      const slashRange = range.cloneRange()
-      slashRange.setStart(range.startContainer, Math.max(0, offset - 1))
-      slashRange.collapse(true)
-      slashRangeRef.current = slashRange
-      setSlashQuery('')
-      setSlashIndex(0)
-      const x = Math.max(12, Math.min(rect.left || editorRect?.left || 12, window.innerWidth - 252))
-      const caretBottom = rect.bottom || (editorRect ? editorRect.top + 30 : 30)
-      const menuHeight = 388
-      const y = caretBottom + menuHeight > window.innerHeight
-        ? Math.max(12, (rect.top || caretBottom) - menuHeight - 4)
-        : caretBottom + 4
-      setSlash({ x, y })
-    }
-  }
-
-  const slashAction = (action) => {
-    const savedRange = slashRangeRef.current
-    const selection = window.getSelection()
-    if (savedRange && selection?.rangeCount) {
-      try {
-        const caretRange = selection.getRangeAt(0)
-        const commandRange = document.createRange()
-        commandRange.setStart(savedRange.startContainer, savedRange.startOffset)
-        commandRange.setEnd(caretRange.startContainer, caretRange.startOffset)
-        commandRange.deleteContents()
-        commandRange.collapse(true)
-        selection.removeAllRanges()
-        selection.addRange(commandRange)
-      } catch {
-        // Fall back to applying the command at the current caret.
-      }
-    }
-    closeSlash()
-    editorRef.current?.focus()
-    if (action === 'embed') insertEmbed()
-    else if (action === 'divider') insertDivider()
-    else if (action === 'h1' || action === 'h2' || action === 'p' || action === 'blockquote') format('formatBlock', action)
-    else format(action)
-  }
-
-  const filteredSlashItems = SLASH_ITEMS.filter((item) => {
-    if (!slashQuery) return true
-    return `${item.label} ${item.desc}`.toLowerCase().includes(slashQuery)
-  })
-
-  const onEditorKeyDown = (event) => {
-    if (!slash) return
-    if (event.key === 'Escape') {
-      event.preventDefault()
-      closeSlash()
-      return
-    }
-    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-      event.preventDefault()
-      if (!filteredSlashItems.length) return
-      const direction = event.key === 'ArrowDown' ? 1 : -1
-      setSlashIndex((current) => (current + direction + filteredSlashItems.length) % filteredSlashItems.length)
-      return
-    }
-    if ((event.key === 'Enter' || event.key === 'Tab') && filteredSlashItems.length) {
-      event.preventDefault()
-      slashAction(filteredSlashItems[slashIndex]?.action || filteredSlashItems[0].action)
-    }
-  }
-
-  // Close slash menu on outside click.
-  useEffect(() => {
-    if (!slash) return
-    const onClick = (e) => {
-      if (!e.target.closest('.slash-menu') && !e.target.closest('#editor')) closeSlash()
-    }
-    document.addEventListener('click', onClick)
-    return () => document.removeEventListener('click', onClick)
-  }, [slash])
-
   const handleDocumentImport = async (file) => {
     if (!file) return
     if (!file.name.toLowerCase().endsWith('.docx')) {
@@ -482,13 +313,9 @@ export default function Editor({ draft = null, navigate, showToast, onOpenPublis
       const data = await response.json().catch(() => null)
       if (!response.ok) throw new Error(data?.error || 'Document import failed')
 
-      const editor = editorRef.current
-      if (!editor) throw new Error('Thesis editor is unavailable')
-      const separator = editor.textContent?.trim() ? '<hr>' : ''
-      editor.insertAdjacentHTML('beforeend', `${separator}${data.html}`)
       setActiveTab('thesis')
-      markDirty()
-      requestAnimationFrame(() => focusEditor())
+      if (!thesisEditorRef.current?.insertHTML(data.html)) throw new Error('Thesis editor is unavailable')
+      requestAnimationFrame(() => thesisEditorRef.current?.focus())
       const warningNote = data.warningCount
         ? ` · ${data.warningCount} unsupported item${data.warningCount === 1 ? '' : 's'} simplified`
         : ''
@@ -742,7 +569,7 @@ export default function Editor({ draft = null, navigate, showToast, onOpenPublis
   }
 
   return (
-    <div onInputCapture={markDirty} onChangeCapture={markDirty} onDragEnter={onDragEnter} onDragLeave={onDragLeave} onDragOver={(e) => e.preventDefault()} onDrop={onDrop}>
+    <div onChangeCapture={markDirty} onDragEnter={onDragEnter} onDragLeave={onDragLeave} onDragOver={(e) => e.preventDefault()} onDrop={onDrop}>
       <header className="px-4 pt-5 pb-5 sm:px-6 sm:pt-8 lg:px-12 border-b flex flex-col items-stretch gap-4 sm:flex-row sm:items-center sm:justify-between" style={{ borderColor: 'var(--border)' }}>
         <div className="flex items-center gap-4">
           <button onClick={() => navigate('dashboard')} className="toolbar-btn"><i className="icon-arrow-left"></i></button>
@@ -978,44 +805,6 @@ export default function Editor({ draft = null, navigate, showToast, onOpenPublis
         </div>
 
         <div className={tabHidden('thesis')}>
-          <div className="sticky top-[57px] md:top-0 z-20 flex items-center gap-0.5 py-2 mb-3 border-b bg-white overflow-x-auto" style={{ borderColor: 'var(--border)' }}>
-            <button className="toolbar-btn" onClick={() => format('bold')} title="Bold"><i className="icon-bold"></i></button>
-            <button className="toolbar-btn" onClick={() => format('italic')} title="Italic"><i className="icon-italic"></i></button>
-            <button className="toolbar-btn" onClick={() => format('underline')} title="Underline"><i className="icon-underline"></i></button>
-            <button className="toolbar-btn" onClick={() => format('strikeThrough')} title="Strikethrough"><i className="icon-strikethrough"></i></button>
-            <div className="w-px h-4 mx-1" style={{ background: 'var(--border)' }}></div>
-            <button className="toolbar-btn" onClick={() => format('formatBlock', 'h1')} title="Heading 1"><span className="font-serif text-xs font-semibold">H1</span></button>
-            <button className="toolbar-btn" onClick={() => format('formatBlock', 'h2')} title="Heading 2"><span className="font-serif text-xs font-semibold">H2</span></button>
-            <button className="toolbar-btn" onClick={() => format('formatBlock', 'p')} title="Paragraph"><span className="text-xs">¶</span></button>
-            <button className="toolbar-btn" onClick={() => format('formatBlock', 'blockquote')} title="Quote"><i className="icon-quote"></i></button>
-            <div className="w-px h-4 mx-1" style={{ background: 'var(--border)' }}></div>
-            <button className="toolbar-btn" onClick={() => format('insertUnorderedList')} title="Bullet list"><i className="icon-list"></i></button>
-            <button className="toolbar-btn" onClick={() => format('insertOrderedList')} title="Numbered list"><i className="icon-list-ordered"></i></button>
-            <div className="w-px h-4 mx-1" style={{ background: 'var(--border)' }}></div>
-            <button className="toolbar-btn" onClick={() => format('createLink')} title="Link"><i className="icon-link"></i></button>
-            <button className="toolbar-btn" onClick={insertDivider} title="Divider"><i className="icon-minus"></i></button>
-            <button className="toolbar-btn" onClick={insertEmbed} title="Embed"><i className="icon-chart-no-axes-column"></i></button>
-            <button type="button" className="editor-command-hint hidden sm:block ml-auto" onClick={openSlashCommands}>
-              Type <kbd>/</kbd> for commands
-            </button>
-            <button
-              type="button"
-              className="editor-command-hint whitespace-nowrap sm:ml-2"
-              onClick={() => documentInputRef.current?.click()}
-              disabled={importingDocument}
-              title="Import a Word DOCX document"
-            >
-              <i className="icon-file-text text-xs mr-1"></i>{importingDocument ? 'Importing…' : 'Import DOCX'}
-            </button>
-            <input
-              ref={documentInputRef}
-              type="file"
-              accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-              className="hidden"
-              onChange={(event) => handleDocumentImport(event.target.files?.[0])}
-            />
-          </div>
-
           {dragging && (
             <div className="absolute inset-0 z-30 flex items-center justify-center pointer-events-none" style={{ background: 'rgba(255,255,255,0.9)' }}>
               <div className="drop-zone dragging p-12 rounded-lg text-center">
@@ -1025,23 +814,14 @@ export default function Editor({ draft = null, navigate, showToast, onOpenPublis
               </div>
             </div>
           )}
-
-          <div
-            id="editor"
-            ref={editorRef}
-            className="editor-content"
-            contentEditable
-            suppressContentEditableWarning
-            role="textbox"
-            aria-label="Thesis body"
-            aria-multiline="true"
-            aria-placeholder="Begin your thesis. Type slash for commands, or drag in a Word document."
-            tabIndex={0}
-            spellCheck
-            data-placeholder="Begin your thesis… Type / for commands, or drag in a Word document."
-            onInput={onEditorInput}
-            onKeyDown={onEditorKeyDown}
-            onClick={focusEditor}
+          <ThesisEditor
+            ref={thesisEditorRef}
+            initialHtml={draft?.body || ''}
+            onChange={markDirty}
+            onImportFile={handleDocumentImport}
+            importingDocument={importingDocument}
+            documentInputRef={documentInputRef}
+            showToast={showToast}
           />
         </div>
 
@@ -1173,30 +953,6 @@ export default function Editor({ draft = null, navigate, showToast, onOpenPublis
         </div>
       </div>
 
-      {slash && (
-        <div className="slash-menu" role="listbox" aria-label="Editor commands" style={{ position: 'fixed', left: slash.x, top: slash.y }}>
-          {filteredSlashItems.map((item, index) => (
-            <div
-              key={item.action}
-              className={`slash-item ${index === slashIndex ? 'active' : ''}`}
-              role="option"
-              aria-selected={index === slashIndex}
-              onMouseEnter={() => setSlashIndex(index)}
-              onMouseDown={(event) => event.preventDefault()}
-              onClick={() => slashAction(item.action)}
-            >
-              <div className="icon">{item.icon}</div>
-              <div>
-                <div className="font-medium">{item.label}</div>
-                <div className="text-[11px]" style={{ color: 'var(--muted)' }}>{item.desc}</div>
-              </div>
-            </div>
-          ))}
-          {!filteredSlashItems.length && (
-            <div className="px-3 py-4 text-xs text-center" style={{ color: 'var(--muted)' }}>No matching commands</div>
-          )}
-        </div>
-      )}
     </div>
   )
 }

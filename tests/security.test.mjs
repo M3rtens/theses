@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import test from 'node:test'
+import { generateHTML, generateJSON } from '@tiptap/html/server'
 import nextConfig from '../next.config.mjs'
 import {
   cleanWorkbookModel,
@@ -21,6 +22,7 @@ import { sanitizeThesisHtml } from '../src/lib/html.js'
 import { normalizePublicUrl } from '../src/lib/urls.js'
 import { createAsyncCache } from '../src/lib/asyncCache.js'
 import { hydrateProjectedThesis } from '../src/lib/publicTheses.js'
+import { createThesisEditorExtensions } from '../src/lib/thesisEditorSchema.js'
 import {
   convertDocxBuffer,
   DOCX_CONTENT_TYPE,
@@ -75,6 +77,40 @@ test('thesis HTML sanitizer preserves editor markup and removes active content',
   assert.match(clean, /href="https:\/\/example.com"/)
   assert.match(clean, /rel="noopener noreferrer"/)
   assert.doesNotMatch(clean, /onclick|onerror|onload|javascript:|<script|<svg|<img|style=/i)
+})
+
+test('structured editor round-trips existing thesis HTML and legacy chart placeholders', () => {
+  const extensions = createThesisEditorExtensions()
+  const legacy = [
+    '<h1>Investment case</h1>',
+    '<p><strong>Durable</strong> growth with <u>pricing power</u>.</p>',
+    '<blockquote>Management guidance</blockquote>',
+    '<ul><li>Recurring revenue</li><li>High retention</li></ul>',
+    '<p><a href="https://example.com/source" target="_blank">Source</a></p>',
+    '<div class="my-4 p-4 border rounded"><div class="text-[10px] font-mono uppercase tracking-wider">Embedded Chart</div><div class="text-sm font-medium mt-1">Revenue &amp; Margin Trajectory</div></div>',
+  ].join('')
+  const document = generateJSON(legacy, extensions)
+  const types = document.content.map((node) => node.type)
+  assert.deepEqual(types, ['heading', 'paragraph', 'blockquote', 'bulletList', 'paragraph', 'chartPlaceholder'])
+
+  const html = generateHTML(document, extensions)
+  assert.match(html, /<h1>Investment case<\/h1>/)
+  assert.match(html, /<strong>Durable<\/strong>/)
+  assert.match(html, /<u>pricing power<\/u>/)
+  assert.match(html, /data-thesis-chart-placeholder="true"/)
+
+  const sanitized = sanitizeThesisHtml(html)
+  assert.match(sanitized, /data-thesis-chart-placeholder="true"/)
+  assert.equal(generateJSON(sanitized, extensions).content.at(-1).type, 'chartPlaceholder')
+})
+
+test('legacy editor DOM mutation commands have been removed', async () => {
+  const editorView = await readFile(new URL('../src/views/Editor.jsx', import.meta.url), 'utf8')
+  const structuredEditor = await readFile(new URL('../src/components/ThesisEditor.jsx', import.meta.url), 'utf8')
+  assert.doesNotMatch(editorView, /contentEditable|execCommand|insertAdjacentHTML/)
+  assert.match(structuredEditor, /useEditor\(/)
+  assert.match(structuredEditor, /insertContent\(html\)/)
+  assert.match(structuredEditor, /toggleBulletList\(\)/)
 })
 
 test('public URL normalization accepts supported destinations only', () => {

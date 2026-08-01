@@ -42,10 +42,12 @@ This is still a prototype rather than a production-ready service. See [Known lim
 - Security search across equities, ETFs, mutual funds, and indexes.
 - Bull/long and bear/short position declarations.
 - Sector selection and live native-currency price preview.
-- Browser `contentEditable` thesis editor with:
+- Structured Tiptap/ProseMirror thesis editor with:
   - Bold, italic, underline, and strikethrough formatting.
   - Headings, paragraphs, block quotes, lists, links, and dividers.
-  - Slash-command menu with keyboard navigation.
+  - Undo/redo, keyboard shortcuts, safe links, and a slash-command menu with keyboard navigation.
+  - A schema-backed chart placeholder node ready for the chart builder.
+- Existing draft and published HTML remains compatible; no editor-specific database document is required.
 - Authenticated `.docx` import with an 8 MB limit, server-side conversion, safe HTML sanitization, drag-and-drop, and a file picker.
 - Debounced, owner-only cloud drafts with optimistic version checks, cross-device access, automatic import of existing browser drafts, and an offline `localStorage` safety copy.
 - Income statement, balance sheet, and cash-flow views with annual and quarterly periods.
@@ -130,6 +132,7 @@ The Model tab contains an Excel-style workbook editor built with Handsontable, H
 | Database | Supabase Postgres with Row Level Security |
 | Market data | `yahoo-finance2` |
 | Charts | TradingView Lightweight Charts |
+| Rich-text editor | Tiptap / ProseMirror |
 | Spreadsheet grid | Handsontable |
 | Formula engine | HyperFormula |
 | Excel import/export | `xlsx-js-style` |
@@ -392,7 +395,6 @@ Before deploying elsewhere, confirm that the host supports the Node.js runtime u
 
 - Every migration, including cloud drafts, cloud profiles, and public routes, must be applied to each Supabase environment; committing them does not change a remote database automatically.
 - DOCX import preserves text structure and basic formatting; embedded images, tables, comments, and complex Word layouts are simplified or omitted.
-- The rich-text editor uses browser `contentEditable` and `document.execCommand`; it is not backed by Tiptap or another structured editor framework.
 - The editor's embedded-chart command inserts a placeholder block, and the Charts tab does not yet contain a chart builder.
 - Lifecycle automation depends on the separately configured Supabase Cron jobs; applying the migration alone does not start the workers.
 - Notifications are in-app only and are polled once per minute; email and push delivery are not implemented.

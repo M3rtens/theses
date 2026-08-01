@@ -13,6 +13,7 @@ const EMBED_CLASSES = [
   'font-medium',
   'mt-1',
   'text-xs',
+  'thesis-chart-placeholder',
 ]
 
 export function sanitizeThesisHtml(value) {
@@ -23,7 +24,7 @@ export function sanitizeThesisHtml(value) {
     ],
     allowedAttributes: {
       a: ['href', 'target', 'rel'],
-      div: ['class'],
+      div: ['class', 'data-thesis-chart-placeholder'],
       span: ['class'],
     },
     allowedClasses: {
@@ -48,4 +49,3 @@ export function sanitizeThesisHtml(value) {
     },
   })
 }
-
