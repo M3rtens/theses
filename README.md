@@ -135,7 +135,7 @@ The Model tab contains an Excel-style workbook editor built with Handsontable, H
 | Excel import/export | `xlsx-js-style` |
 | Word import | Mammoth |
 | Linting | Oxlint |
-| Tests | Node.js test runner |
+| Tests | Node.js test runner and Playwright |
 
 ## Prerequisites
 
@@ -245,12 +245,14 @@ Open [http://localhost:3000](http://localhost:3000).
 | `npm run build` | Create an optimized production build. |
 | `npm run start` | Start the production server after a build. |
 | `npm run lint` | Run Oxlint. |
-| `npm test` | Run the complete automated test suite. |
+| `npm test` | Run the Node unit and integration test suite. |
+| `npm run test:e2e:install` | Install Playwright's Chromium browser once. |
+| `npm run test:e2e` | Build the app and run deterministic Chromium browser tests. |
 | `npm run test:security` | Run security, validation, caching, and migration-contract tests. |
 | `npm run seed:screenshots` | Add or refresh the marked screenshot/demo dataset in Supabase. |
 | `npm run test:spreadsheet` | Run the spreadsheet utility, formula-engine, and export tests. |
 
-There is currently no full end-to-end test suite. The committed tests cover the spreadsheet subsystem plus security, request validation, public projection, caching, rate limiting, and migration contracts.
+The Playwright suite currently covers the guest Discover and leaderboard journey with deterministic API fixtures, including pagination, search, filters, and canonical links. The Node tests cover the spreadsheet subsystem plus DOCX conversion, security, request validation, public projection, caching, rate limiting, and migration contracts. Authenticated browser coverage still requires a dedicated disposable test account and database.
 
 ## Screenshot data
 
@@ -396,7 +398,7 @@ Before deploying elsewhere, confirm that the host supports the Node.js runtime u
 - Notifications are in-app only and are polled once per minute; email and push delivery are not implemented.
 - Market data is dependent on Yahoo Finance availability and is polled rather than streamed.
 - Public request limiting is process-local; configure a shared deployment-edge limit for multi-instance production enforcement.
-- Automated tests do not yet exercise Supabase policies/functions against a disposable database or cover a full browser publish-to-close workflow.
+- Automated tests do not yet exercise Supabase policies/functions against a disposable database or cover an authenticated browser publish-to-close workflow.
 
 ## License
 

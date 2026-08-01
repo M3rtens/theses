@@ -9,6 +9,8 @@
     "start": "next start",
     "lint": "oxlint",
     "test": "node --test --test-isolation=none tests/*.test.mjs",
+    "test:e2e": "playwright test",
+    "test:e2e:install": "playwright install chromium",
     "test:security": "node --test tests/security.test.mjs",
     "test:spreadsheet": "node --test --test-isolation=none tests/spreadsheet.test.mjs",
     "seed:screenshots": "node --env-file=.env.local scripts/seed-screenshots.mjs"
@@ -32,6 +34,7 @@
     "postcss": "8.5.25"
   },
   "devDependencies": {
+    "@playwright/test": "^1.62.1",
     "@tailwindcss/postcss": "^4.3.2",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
