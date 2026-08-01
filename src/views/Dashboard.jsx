@@ -1,12 +1,20 @@
+import { useEffect, useState } from 'react'
 import ThesisCard from '../components/ThesisCard.jsx'
 import { useUser } from '../components/UserProvider.jsx'
 import { useLeaderboard } from '../lib/useLeaderboard.js'
-import { relativeTime } from '../lib/drafts.js'
+import { loadDrafts, relativeTime } from '../lib/drafts.js'
 import { useLiveTheses } from '../lib/useLiveTheses.js'
 import { useStoredTheses } from '../lib/useStoredTheses.js'
 
 export default function Dashboard({ navigate }) {
   const user = useUser()
+  const [draftCount, setDraftCount] = useState(0)
+  useEffect(() => {
+    const refreshDraftCount = () => setDraftCount(loadDrafts(user?.id).length)
+    refreshDraftCount()
+    window.addEventListener('storage', refreshDraftCount)
+    return () => window.removeEventListener('storage', refreshDraftCount)
+  }, [user?.id])
   // Published theses from the store, matching My Theses.
   const stored = useStoredTheses()
   const allTheses = stored
@@ -67,7 +75,7 @@ export default function Dashboard({ navigate }) {
       <header className="px-4 pt-6 pb-5 sm:px-6 sm:pt-8 sm:pb-6 lg:px-12 flex items-end justify-between border-b" style={{ borderColor: 'var(--border)' }}>
         <div>
           <h1 className="font-serif text-2xl sm:text-3xl font-medium tracking-tight">{greeting}{user?.firstName ? `, ${user.firstName}` : ''}.</h1>
-          <p className="text-sm mt-1" style={{ color: 'var(--ink-soft)' }}>You have <span style={{ color: alerts.length ? 'var(--bear)' : 'var(--ink-soft)', fontWeight: 500 }}>{alerts.length} trigger alert{alerts.length === 1 ? '' : 's'}</span> and <span style={{ fontWeight: 500 }}>1 draft</span> awaiting review.</p>
+          <p className="text-sm mt-1" style={{ color: 'var(--ink-soft)' }}>You have <span style={{ color: alerts.length ? 'var(--bear)' : 'var(--ink-soft)', fontWeight: 500 }}>{alerts.length} trigger alert{alerts.length === 1 ? '' : 's'}</span> and <span style={{ fontWeight: 500 }}>{draftCount} draft{draftCount === 1 ? '' : 's'}</span> awaiting review.</p>
         </div>
       </header>
 

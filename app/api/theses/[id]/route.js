@@ -1,11 +1,15 @@
 import { NextResponse } from 'next/server'
 import { getThesis, updateThesis } from '../../../../src/lib/thesesStore.js'
 import { errorStatus, requireUserContext } from '../../../../src/lib/auth.js'
+import {
+  readJsonObject,
+  REQUEST_LIMITS,
+  validateLifecyclePayload,
+  validationResponse,
+} from '../../../../src/lib/apiValidation.js'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
-
-const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/
 
 // PATCH /api/theses/:id -> mutate a thesis's lifecycle. Two actions:
 //   { action: 'schedule-close', closeDate: 'YYYY-MM-DD' }  seal a future close date
@@ -24,9 +28,11 @@ export async function PATCH(request, { params }) {
 
   let body
   try {
-    body = await request.json()
-  } catch {
-    return NextResponse.json({ error: 'invalid JSON body' }, { status: 400 })
+    body = validateLifecyclePayload(await readJsonObject(request, REQUEST_LIMITS.lifecycle))
+  } catch (error) {
+    const validation = validationResponse(error)
+    if (validation) return NextResponse.json({ error: validation.message }, { status: validation.status })
+    throw error
   }
 
   let thesis
@@ -48,16 +54,8 @@ export async function PATCH(request, { params }) {
     if (thesis.closeDate) {
       return NextResponse.json({ error: 'a close date is already sealed and cannot be changed' }, { status: 409 })
     }
-    const closeDate = String(body?.closeDate || '')
-    if (!ISO_DATE.test(closeDate)) {
-      return NextResponse.json({ error: 'closeDate must be YYYY-MM-DD' }, { status: 400 })
-    }
-    const today = new Date().toISOString().slice(0, 10)
-    if (closeDate <= today) {
-      return NextResponse.json({ error: 'closeDate must be in the future' }, { status: 400 })
-    }
     try {
-      const saved = await updateThesis(id, { closeDate })
+      const saved = await updateThesis(id, { closeDate: body.closeDate })
       return NextResponse.json(saved)
     } catch (e) {
       return NextResponse.json({ error: e.message }, { status: errorStatus(e) })
@@ -72,7 +70,8 @@ export async function PATCH(request, { params }) {
       const { lockEntryPrice } = await import('../../../../src/lib/yahoo.js')
       lock = await lockEntryPrice(thesis.resolvedSymbol || thesis.ticker)
     } catch (e) {
-      return NextResponse.json({ error: `could not seal closing price: ${e.message}` }, { status: 502 })
+      console.error('Closing-price lock failed', e)
+      return NextResponse.json({ error: 'could not seal closing price' }, { status: 502 })
     }
 
     const nowIso = new Date().toISOString()

@@ -1,5 +1,6 @@
 import 'server-only'
 import { requireUserContext } from './auth.js'
+import { sanitizeThesisHtml } from './html.js'
 
 // Postgres-backed store for user-created theses, scoped to the signed-in user
 // via Supabase Row Level Security. Each thesis object is stored whole in the
@@ -13,7 +14,12 @@ async function ctx() {
 }
 
 // Fold the row id into the stored thesis object.
-const hydrate = (row) => ({ ...row.data, id: row.id, ownerId: row.user_id })
+const hydrate = (row) => ({
+  ...row.data,
+  body: sanitizeThesisHtml(row.data?.body),
+  id: row.id,
+  ownerId: row.user_id,
+})
 
 // Newest first.
 export async function listTheses() {

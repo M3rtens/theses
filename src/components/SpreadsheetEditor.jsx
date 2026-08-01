@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom'
 import { HotTable } from '@handsontable/react-wrapper'
 import { registerAllModules } from 'handsontable/registry'
 import XLSX from 'xlsx-js-style'
+import { normalizePublicUrl } from '../lib/urls.js'
 import {
   DEFAULT_COL_WIDTH,
   DEFAULT_ROW_HEIGHT,
@@ -244,7 +245,8 @@ const workbookFormats = (worksheet) => {
       }
       const numberFormat = excelZToNumbro(cell.z || style.numFmt)
       if (numberFormat) fmt.nf = numberFormat
-      if (cell.l?.Target) fmt.link = cell.l.Target
+      const safeLink = normalizePublicUrl(cell.l?.Target)
+      if (safeLink) fmt.link = safeLink
       if (Object.keys(fmt).length) formats[cellKey(row, col)] = fmt
     }
   }
@@ -371,7 +373,7 @@ const SpreadsheetGrid = memo(function SpreadsheetGrid({
       const instance = hotRef.current?.hotInstance
       const row = instance?.toPhysicalRow(coords.row)
       const col = instance?.toPhysicalColumn(coords.col)
-      const link = row == null || col == null ? null : formats?.[cellKey(row, col)]?.link
+      const link = row == null || col == null ? null : normalizePublicUrl(formats?.[cellKey(row, col)]?.link)
       if (link) window.open(link, '_blank', 'noopener,noreferrer')
     }}
     afterRowMove={(movedRows, finalIndex, dropIndex, movePossible, orderChanged) => {
@@ -962,7 +964,11 @@ export default function SpreadsheetEditor({ initialModel, onChange }) {
     const entered = window.prompt('Link address:', 'https://')
     if (!entered?.trim()) return
     const address = entered.trim()
-    const target = /^(?:https?:\/\/|mailto:|tel:|#)/i.test(address) ? address : `https://${address}`
+    const target = normalizePublicUrl(address, { assumeHttps: true })
+    if (!target) {
+      window.alert('Enter a valid web, email, telephone, or same-document link.')
+      return
+    }
     const current = String(gridData[selection.row]?.[selection.col] ?? '').trim()
     const label = window.prompt('Text to display:', current || address)
     if (label == null) return

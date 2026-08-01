@@ -1,4 +1,5 @@
 import XLSX from 'xlsx-js-style'
+import { normalizePublicUrl } from './urls.js'
 
 // Shared spreadsheet helpers used by both the editor and the read-only viewer so
 // a saved model renders identically in both. The persisted per-sheet model shape
@@ -233,9 +234,10 @@ export const buildModelWorkbook = (sheets) => {
       }
       const z = numbroToExcelZ(fmt?.nf)
       if (z && sheet[address]) sheet[address].z = z
-      if (fmt?.link) {
+      const safeLink = normalizePublicUrl(fmt?.link)
+      if (safeLink) {
         if (!sheet[address]) sheet[address] = { t: 's', v: '' }
-        sheet[address].l = { Target: fmt.link }
+        sheet[address].l = { Target: safeLink }
       }
       const note = notes[cellKey(rowIndex, colIndex)]
       if (note) {

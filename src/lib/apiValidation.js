@@ -1,0 +1,317 @@
+import { sanitizeThesisHtml } from './html.js'
+import { normalizePublicUrl } from './urls.js'
+
+const textEncoder = new TextEncoder()
+const SYMBOL = /^[A-Z0-9^][A-Z0-9.^=/_-]{0,63}$/
+const CELL_KEY = /^(0|[1-9]\d*),(0|[1-9]\d*)$/
+const OPS = new Set(['<', '<=', '>', '>=', '=='])
+const STATEMENTS = new Set(['income', 'balance', 'cashflow'])
+const PERIODS = new Set(['annual', 'quarterly'])
+const SCALES = new Set(['K', 'M', 'B'])
+const SIDES = new Set(['bull', 'bear'])
+const TRIGGER_STATUS = new Set(['clear', 'warning', 'breached'])
+const KINDS = new Set(['money', 'perShare', 'shares'])
+const MAX_MODEL_BYTES = 1_750_000
+
+export const REQUEST_LIMITS = {
+  publish: 2_000_000,
+  update: 16_000,
+  lifecycle: 4_000,
+  cards: 64_000,
+}
+
+export class RequestValidationError extends Error {
+  constructor(message, status = 400) {
+    super(message)
+    this.name = 'RequestValidationError'
+    this.status = status
+  }
+}
+
+const isPlainObject = (value) => value != null && typeof value === 'object' && !Array.isArray(value)
+const byteLength = (value) => textEncoder.encode(String(value)).byteLength
+const fail = (message, status) => { throw new RequestValidationError(message, status) }
+
+function assertAllowedKeys(value, allowed, label) {
+  const unknown = Object.keys(value).filter((key) => !allowed.has(key))
+  if (unknown.length) fail(`${label} contains unsupported field: ${unknown[0]}`)
+}
+
+function cleanString(value, { label, max, required = false, fallback = '' }) {
+  const text = value == null ? fallback : String(value).trim()
+  if (required && !text) fail(`${label} is required`)
+  if (text.length > max) fail(`${label} must be ${max} characters or fewer`)
+  return text
+}
+
+export function normalizeSymbol(value, label = 'symbol') {
+  const symbol = cleanString(value, { label, max: 64, required: true }).toUpperCase()
+  if (!SYMBOL.test(symbol)) fail(`${label} contains unsupported characters`)
+  return symbol
+}
+
+export function isCalendarDate(value) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(value || ''))) return false
+  const [year, month, day] = value.split('-').map(Number)
+  const parsed = new Date(Date.UTC(year, month - 1, day))
+  return parsed.getUTCFullYear() === year
+    && parsed.getUTCMonth() === month - 1
+    && parsed.getUTCDate() === day
+}
+
+export function validateHistoryDate(value) {
+  const date = String(value || '')
+  if (!isCalendarDate(date)) fail('from must be a real calendar date in YYYY-MM-DD format')
+  const year = Number(date.slice(0, 4))
+  const currentYear = new Date().getUTCFullYear()
+  if (year < 1970 || year > currentYear + 1) fail('from is outside the supported history range')
+  return date
+}
+
+export async function readJsonObject(request, maxBytes) {
+  const contentType = request.headers.get('content-type') || ''
+  if (!/^application\/(?:[a-z0-9.+-]*\+)?json(?:\s*;|$)/i.test(contentType)) {
+    fail('content-type must be application/json', 415)
+  }
+
+  const declaredLength = Number(request.headers.get('content-length'))
+  if (Number.isFinite(declaredLength) && declaredLength > maxBytes) {
+    fail('request body is too large', 413)
+  }
+
+  const raw = await request.text()
+  if (byteLength(raw) > maxBytes) fail('request body is too large', 413)
+
+  let parsed
+  try {
+    parsed = JSON.parse(raw)
+  } catch {
+    fail('invalid JSON body')
+  }
+  if (!isPlainObject(parsed)) fail('JSON body must be an object')
+  return parsed
+}
+
+function cleanComparisons(trigger, triggerIndex) {
+  const raw = Array.isArray(trigger.comparisons) && trigger.comparisons.length
+    ? trigger.comparisons
+    : [{ op: trigger.op, value: trigger.value, scale: trigger.scale, connector: null }]
+  if (raw.length > 5) fail(`trigger ${triggerIndex + 1} has too many comparisons`)
+
+  return raw.map((comparison, comparisonIndex) => {
+    if (!isPlainObject(comparison)) fail(`trigger ${triggerIndex + 1} comparison ${comparisonIndex + 1} must be an object`)
+    const op = String(comparison.op || '')
+    const value = Number(comparison.value)
+    if (!OPS.has(op)) fail(`trigger ${triggerIndex + 1} has an invalid comparison operator`)
+    if (!Number.isFinite(value)) fail(`trigger ${triggerIndex + 1} has a non-finite threshold`)
+    return {
+      op,
+      value,
+      scale: SCALES.has(comparison.scale) ? comparison.scale : 'M',
+      connector: comparisonIndex === 0 ? null : (comparison.connector === 'or' ? 'or' : 'and'),
+    }
+  })
+}
+
+function cleanTriggers(value) {
+  if (value == null) return []
+  if (!Array.isArray(value)) fail('triggers must be an array')
+  if (value.length > 20) fail('no more than 20 triggers are allowed')
+
+  return value.map((trigger, index) => {
+    if (!isPlainObject(trigger)) fail(`trigger ${index + 1} must be an object`)
+    const comparisons = cleanComparisons(trigger, index)
+    const first = comparisons[0]
+    const metric = cleanString(trigger.metric, { label: `trigger ${index + 1} metric`, max: 200, required: true })
+    const condition = cleanString(trigger.c ?? trigger.condition, { label: `trigger ${index + 1} condition`, max: 500, required: true })
+    return {
+      c: condition,
+      s: TRIGGER_STATUS.has(trigger.s) ? trigger.s : 'clear',
+      metric,
+      statement: STATEMENTS.has(trigger.statement) ? trigger.statement : 'income',
+      period: PERIODS.has(trigger.period) ? trigger.period : 'annual',
+      kind: KINDS.has(trigger.kind) ? trigger.kind : 'money',
+      currency: cleanString(trigger.currency, { label: `trigger ${index + 1} currency`, max: 12 }),
+      comparisons,
+      connectors: comparisons.slice(1).map((comparison) => comparison.connector || 'and'),
+      op: first.op,
+      value: first.value,
+      scale: first.scale,
+    }
+  })
+}
+
+function cleanCellValue(value, label) {
+  if (value == null || typeof value === 'number' || typeof value === 'boolean') return value
+  if (typeof value !== 'string') fail(`${label} must be text, a number, a boolean, or null`)
+  if (value.length > 10_000) fail(`${label} is too long`)
+  return value
+}
+
+function cleanFormat(format, label) {
+  if (!isPlainObject(format)) fail(`${label} must be an object`)
+  const cleaned = {}
+  for (const key of ['b', 'i', 'u', 's', 'w']) if (format[key] === true) cleaned[key] = true
+  if (['left', 'center', 'right'].includes(format.a)) cleaned.a = format.a
+  if (['top', 'middle', 'bottom'].includes(format.va)) cleaned.va = format.va
+  if (typeof format.c === 'string' && format.c.length <= 32) cleaned.c = format.c
+  if (typeof format.bg === 'string' && format.bg.length <= 32) cleaned.bg = format.bg
+  if (typeof format.ff === 'string' && format.ff.length <= 100) cleaned.ff = format.ff
+  if (Number.isFinite(Number(format.fs)) && Number(format.fs) >= 6 && Number(format.fs) <= 96) cleaned.fs = Number(format.fs)
+  if (typeof format.nf === 'string' && format.nf.length <= 100) cleaned.nf = format.nf
+  if (format.t === 'checkbox') cleaned.t = 'checkbox'
+  if (isPlainObject(format.bd)) {
+    cleaned.bd = Object.fromEntries(['t', 'r', 'b', 'l'].filter((key) => format.bd[key] === true).map((key) => [key, true]))
+  }
+  if (format.link != null) {
+    const link = normalizePublicUrl(format.link)
+    if (!link) fail(`${label} contains an unsafe hyperlink`)
+    cleaned.link = link
+  }
+  return cleaned
+}
+
+function cleanSheetModel(value, sheetIndex) {
+  if (!isPlainObject(value)) fail(`sheet ${sheetIndex + 1} model must be an object`)
+  const headers = Array.isArray(value.headers) ? value.headers : []
+  const rows = Array.isArray(value.rows) ? value.rows : []
+  if (headers.length > 255) fail(`sheet ${sheetIndex + 1} has too many columns`)
+  if (rows.length > 2_000) fail(`sheet ${sheetIndex + 1} has too many rows`)
+
+  const cleaned = {
+    headers: headers.map((header, index) => cleanCellValue(header, `sheet ${sheetIndex + 1} header ${index + 1}`)),
+    rows: rows.map((row, rowIndex) => {
+      if (!isPlainObject(row)) fail(`sheet ${sheetIndex + 1} row ${rowIndex + 1} must be an object`)
+      if (!Array.isArray(row.values)) fail(`sheet ${sheetIndex + 1} row ${rowIndex + 1} values must be an array`)
+      if (row.values.length > 255) fail(`sheet ${sheetIndex + 1} row ${rowIndex + 1} has too many columns`)
+      return {
+        label: cleanCellValue(row.label, `sheet ${sheetIndex + 1} row ${rowIndex + 1} label`),
+        values: row.values.map((cell, columnIndex) => cleanCellValue(cell, `sheet ${sheetIndex + 1} row ${rowIndex + 1} column ${columnIndex + 2}`)),
+      }
+    }),
+  }
+
+  if (isPlainObject(value.formats)) {
+    const entries = Object.entries(value.formats)
+    if (entries.length > 50_000) fail(`sheet ${sheetIndex + 1} has too many formatted cells`)
+    cleaned.formats = Object.fromEntries(entries.map(([key, format]) => {
+      if (!CELL_KEY.test(key)) fail(`sheet ${sheetIndex + 1} contains an invalid format coordinate`)
+      return [key, cleanFormat(format, `sheet ${sheetIndex + 1} cell ${key}`)]
+    }))
+  }
+
+  if (isPlainObject(value.comments)) {
+    const entries = Object.entries(value.comments)
+    if (entries.length > 10_000) fail(`sheet ${sheetIndex + 1} has too many comments`)
+    cleaned.comments = Object.fromEntries(entries.map(([key, comment]) => {
+      if (!CELL_KEY.test(key)) fail(`sheet ${sheetIndex + 1} contains an invalid comment coordinate`)
+      return [key, cleanString(comment, { label: `sheet ${sheetIndex + 1} comment`, max: 5_000 })]
+    }))
+  }
+
+  if (Array.isArray(value.merges)) {
+    if (value.merges.length > 10_000) fail(`sheet ${sheetIndex + 1} has too many merged ranges`)
+    cleaned.merges = value.merges.map((merge, mergeIndex) => {
+      if (!isPlainObject(merge)) fail(`sheet ${sheetIndex + 1} merge ${mergeIndex + 1} must be an object`)
+      const result = {}
+      for (const key of ['row', 'col', 'rowspan', 'colspan']) {
+        const number = Number(merge[key])
+        if (!Number.isInteger(number) || number < (key.endsWith('span') ? 1 : 0)) fail(`sheet ${sheetIndex + 1} merge ${mergeIndex + 1} is invalid`)
+        result[key] = number
+      }
+      return result
+    })
+  }
+
+  for (const key of ['colWidths', 'rowHeights', 'view']) {
+    if (isPlainObject(value[key])) cleaned[key] = structuredClone(value[key])
+  }
+  return cleaned
+}
+
+export function cleanWorkbookModel(value) {
+  if (value == null) return null
+  if (!isPlainObject(value)) fail('model must be an object')
+  if (byteLength(JSON.stringify(value)) > MAX_MODEL_BYTES) fail('model is too large', 413)
+
+  if (!Array.isArray(value.sheets)) return cleanSheetModel(value, 0)
+  if (value.sheets.length > 25) fail('model has too many sheets')
+  return {
+    filename: cleanString(value.filename, { label: 'model filename', max: 255, fallback: 'Thesis model.xlsx' }),
+    sheets: value.sheets.map((sheet, index) => {
+      if (!isPlainObject(sheet)) fail(`sheet ${index + 1} must be an object`)
+      return {
+        name: cleanString(sheet.name, { label: `sheet ${index + 1} name`, max: 80, required: true }),
+        ...(sheet.hidden === true ? { hidden: true } : {}),
+        model: cleanSheetModel(sheet.model, index),
+      }
+    }),
+  }
+}
+
+export function validateThesisPayload(body) {
+  assertAllowedKeys(body, new Set(['title', 'ticker', 'company', 'sector', 'side', 'body', 'triggers', 'model', 'scheduledPublicationDate', 'draftId']), 'thesis')
+  const side = cleanString(body.side, { label: 'side', max: 8, required: true }).toLowerCase()
+  if (!SIDES.has(side)) fail('side must be "bull" or "bear"')
+
+  const html = typeof body.body === 'string' ? body.body : ''
+  if (byteLength(html) > 200_000) fail('body is too large', 413)
+
+  return {
+    title: cleanString(body.title, { label: 'title', max: 200, required: true }),
+    ticker: normalizeSymbol(body.ticker, 'ticker'),
+    company: cleanString(body.company, { label: 'company', max: 200 }),
+    sector: cleanString(body.sector, { label: 'sector', max: 100 }),
+    side,
+    body: sanitizeThesisHtml(html),
+    triggers: cleanTriggers(body.triggers),
+    model: cleanWorkbookModel(body.model),
+  }
+}
+
+export function validateUpdatePayload(body) {
+  assertAllowedKeys(body, new Set(['text']), 'update')
+  return { text: cleanString(body.text, { label: 'text', max: 5_000, required: true }) }
+}
+
+export function validateLifecyclePayload(body) {
+  assertAllowedKeys(body, new Set(['action', 'closeDate']), 'lifecycle request')
+  const action = String(body.action || '')
+  if (action === 'close') {
+    if (body.closeDate != null) fail('closeDate is not allowed for the close action')
+    return { action }
+  }
+  if (action !== 'schedule-close') fail('unknown action')
+  const closeDate = String(body.closeDate || '')
+  if (!isCalendarDate(closeDate)) fail('closeDate must be a real calendar date in YYYY-MM-DD format')
+  const today = new Date().toISOString().slice(0, 10)
+  if (closeDate <= today) fail('closeDate must be in the future')
+  return { action, closeDate }
+}
+
+export function validateCardItems(body) {
+  assertAllowedKeys(body, new Set(['items']), 'cards request')
+  if (!Array.isArray(body.items) || !body.items.length) fail('items array is required')
+  if (body.items.length > 25) fail('no more than 25 card items are allowed')
+  const seen = new Set()
+  const items = []
+  body.items.forEach((item, index) => {
+    if (!isPlainObject(item)) fail(`item ${index + 1} must be an object`)
+    assertAllowedKeys(item, new Set(['symbol', 'from']), `item ${index + 1}`)
+    const symbol = normalizeSymbol(item.symbol, `item ${index + 1} symbol`)
+    const from = validateHistoryDate(item.from)
+    const key = `${symbol}\u0000${from}`
+    if (!seen.has(key)) {
+      seen.add(key)
+      items.push({ symbol, from })
+    }
+  })
+  return items
+}
+
+export function validationResponse(error) {
+  if (error instanceof RequestValidationError) {
+    return { message: error.message, status: error.status }
+  }
+  return null
+}

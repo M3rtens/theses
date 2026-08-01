@@ -14,6 +14,7 @@ import {
   mergesFor,
 } from '../lib/spreadsheet.js'
 import { createWorkbookFormulaEngine } from '../lib/spreadsheetEngine.js'
+import { normalizePublicUrl } from '../lib/urls.js'
 import 'handsontable/styles/handsontable.min.css'
 import 'handsontable/styles/ht-theme-main.min.css'
 
@@ -118,7 +119,7 @@ export default function SpreadsheetViewer({ model }) {
           if (event.detail !== 2 || coords.row < 0 || coords.col < 0) return
           const row = hotRef.current?.hotInstance?.toPhysicalRow(coords.row)
           const col = hotRef.current?.hotInstance?.toPhysicalColumn(coords.col)
-          const link = row == null || col == null ? null : active.model.formats?.[`${row},${col}`]?.link
+          const link = row == null || col == null ? null : normalizePublicUrl(active.model.formats?.[`${row},${col}`]?.link)
           if (link) window.open(link, '_blank', 'noopener,noreferrer')
         }}
         afterRenderer={(td, row, col, prop, value, cellProperties) => applyCellStyle(td, cellProperties)}

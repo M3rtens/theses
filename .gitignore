@@ -12,6 +12,11 @@ dist
 dist-ssr
 *.local
 
+# Local security review (contains deployment-specific remediation notes)
+SECURITY_REVIEW.local.md
+
+features.md
+
 # Next.js
 .next
 out

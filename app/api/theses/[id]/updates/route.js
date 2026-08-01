@@ -1,6 +1,12 @@
 import { NextResponse } from 'next/server'
 import { appendUpdate } from '../../../../../src/lib/thesesStore.js'
 import { errorStatus, requireUserContext } from '../../../../../src/lib/auth.js'
+import {
+  readJsonObject,
+  REQUEST_LIMITS,
+  validateUpdatePayload,
+  validationResponse,
+} from '../../../../../src/lib/apiValidation.js'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -18,18 +24,15 @@ export async function POST(request, { params }) {
 
   let body
   try {
-    body = await request.json()
-  } catch {
-    return NextResponse.json({ error: 'invalid JSON body' }, { status: 400 })
-  }
-
-  const text = String(body?.text || '').trim()
-  if (!text) {
-    return NextResponse.json({ error: 'text is required' }, { status: 400 })
+    body = validateUpdatePayload(await readJsonObject(request, REQUEST_LIMITS.update))
+  } catch (error) {
+    const validation = validationResponse(error)
+    if (validation) return NextResponse.json({ error: validation.message }, { status: validation.status })
+    throw error
   }
 
   try {
-    const update = await appendUpdate(id, text)
+    const update = await appendUpdate(id, body.text)
     if (!update) {
       return NextResponse.json({ error: 'thesis not found' }, { status: 404 })
     }

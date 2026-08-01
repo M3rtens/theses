@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '../../../src/lib/supabase/admin.js'
 import { makeRetOf } from '../../../src/lib/stats.js'
+import { sanitizeThesisHtml } from '../../../src/lib/html.js'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -49,7 +50,12 @@ export async function GET() {
   const retOf = makeRetOf(null)
 
   const feed = (thesesRes.data || []).map((row) => {
-    const thesis = { ...row.data, id: row.id, ownerId: row.user_id }
+    const thesis = {
+      ...row.data,
+      body: sanitizeThesisHtml(row.data?.body),
+      id: row.id,
+      ownerId: row.user_id,
+    }
     const p = profileById[row.user_id] || {}
     return {
       // Carry the whole thesis so opening a card can route to the real detail.
