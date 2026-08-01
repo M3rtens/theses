@@ -6,6 +6,7 @@ import PriceChart from '../components/PriceChart.jsx'
 import SpreadsheetViewer from '../components/SpreadsheetViewer.jsx'
 import ShareControls from '../components/ShareControls.jsx'
 import ThesisBody from '../components/ThesisBody.jsx'
+import ThesisDiscussion from '../components/ThesisDiscussion.jsx'
 import { fmtPrice } from '../lib/format.js'
 import { modelHasContent } from '../lib/model.js'
 import { evaluateTrigger, latestMetric, formatMetricValue } from '../lib/triggers.js'
@@ -613,6 +614,8 @@ export default function ThesisDetail({ navigate, thesis }) {
                 )
               )}
             </div>
+
+            {base.id && <ThesisDiscussion thesisId={base.id} />}
           </div>
 
           <div className="space-y-6">

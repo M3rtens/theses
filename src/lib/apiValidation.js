@@ -23,6 +23,8 @@ export const REQUEST_LIMITS = {
   cards: 64_000,
   notifications: 8_000,
   social: 4_000,
+  comment: 8_000,
+  report: 4_000,
 }
 
 export class RequestValidationError extends Error {
@@ -494,6 +496,29 @@ export function validateSocialMutationPayload(body) {
     return { kind, targetId }
   }
   fail('kind must be follow or bookmark')
+}
+
+export function validateCommentPayload(body) {
+  if (!isPlainObject(body)) fail('comment must be an object')
+  assertAllowedKeys(body, new Set(['body', 'parentId']), 'comment')
+  const text = cleanString(body.body, { label: 'comment', max: 2_000, required: true })
+  if (body.parentId == null) return { body: text, parentId: null }
+  const parentId = Number(body.parentId)
+  if (!Number.isSafeInteger(parentId) || parentId <= 0) fail('parentId must be a positive comment id')
+  return { body: text, parentId }
+}
+
+export function validateCommentReportPayload(body) {
+  if (!isPlainObject(body)) fail('report must be an object')
+  assertAllowedKeys(body, new Set(['reason', 'details']), 'report')
+  const reason = String(body.reason || '')
+  if (!new Set(['spam', 'harassment', 'misinformation', 'other']).has(reason)) {
+    fail('unsupported report reason')
+  }
+  return {
+    reason,
+    details: cleanString(body.details, { label: 'report details', max: 500 }),
+  }
 }
 
 export function validateCardItems(body) {

@@ -12,6 +12,8 @@ const iconFor = (type) => {
   if (type === 'thesis_update') return 'icon-message-square-text'
   if (type === 'watched_close') return 'icon-lock'
   if (type === 'watched_trigger') return 'icon-bell-ring'
+  if (type === 'discussion_comment') return 'icon-message-circle'
+  if (type === 'discussion_reply') return 'icon-reply'
   return 'icon-wrench'
 }
 

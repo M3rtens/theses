@@ -7,6 +7,8 @@ import {
   isCalendarDate,
   readJsonObject,
   validateCardItems,
+  validateCommentPayload,
+  validateCommentReportPayload,
   validateDraftCreatePayload,
   validateDraftUpdatePayload,
   validateHistoryDate,
@@ -325,6 +327,24 @@ test('social mutations accept only supported relationship targets', () => {
   assert.throws(() => validateSocialMutationPayload({ kind: 'like', targetId: 1 }), /follow or bookmark/)
 })
 
+test('discussion validation bounds comments, replies, and reports', () => {
+  assert.deepEqual(validateCommentPayload({ body: '  Evidence changed.  ' }), {
+    body: 'Evidence changed.',
+    parentId: null,
+  })
+  assert.deepEqual(validateCommentPayload({ body: 'Reply', parentId: 12 }), {
+    body: 'Reply',
+    parentId: 12,
+  })
+  assert.throws(() => validateCommentPayload({ body: '' }), /comment is required/)
+  assert.throws(() => validateCommentPayload({ body: 'Reply', parentId: 0 }), /positive comment id/)
+  assert.deepEqual(validateCommentReportPayload({ reason: 'spam', details: 'Repeated links' }), {
+    reason: 'spam',
+    details: 'Repeated links',
+  })
+  assert.throws(() => validateCommentReportPayload({ reason: 'disagree' }), /unsupported report reason/)
+})
+
 test('exchange-local scheduling requires a fresh regular-session snapshot', () => {
   const now = Date.parse('2026-08-03T15:00:00.000Z')
   assert.equal(calendarDateInTimezone('2026-08-01T00:30:00.000Z', 'America/New_York'), '2026-07-31')
@@ -627,6 +647,10 @@ test('core integrity migration seals theses and restricts public reads', async (
     new URL('../supabase/migrations/202608020001_social_graph.sql', import.meta.url),
     'utf8',
   )
+  const discussions = await readFile(
+    new URL('../supabase/migrations/202608020002_thesis_discussions.sql', import.meta.url),
+    'utf8',
+  )
   const cron = await readFile(
     new URL('../supabase/cron/setup_lifecycle.sql', import.meta.url),
     'utf8',
@@ -701,4 +725,12 @@ test('core integrity migration seals theses and restricts public reads', async (
   assert.match(socialGraph, /create trigger notify_social_thesis_change/i)
   assert.match(socialGraph, /create trigger notify_social_trigger_transition/i)
   assert.match(socialGraph, /on conflict \(event_key\) do nothing/i)
+  assert.match(discussions, /create table if not exists public\.thesis_comments/i)
+  assert.match(discussions, /create table if not exists public\.comment_reports/i)
+  assert.match(discussions, /replies_must_target_root_comment/i)
+  assert.match(discussions, /comment_content_is_immutable/i)
+  assert.match(discussions, /revoke all on public\.thesis_comments from public, anon, authenticated/i)
+  assert.match(discussions, /create trigger notify_thesis_discussion/i)
+  assert.match(discussions, /discussion_reply/i)
+  assert.match(discussions, /comment_reports_reporter_unique/i)
 })

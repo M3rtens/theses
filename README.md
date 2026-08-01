@@ -106,6 +106,7 @@ This is still a prototype rather than a production-ready service. See [Known lim
 - Follow/unfollow controls on public analyst profiles and a private followed-analyst list.
 - Private thesis bookmarks collected in the Saved workspace.
 - Deduplicated in-app alerts for new theses, timestamped updates, closures, and trigger transitions from followed or bookmarked records.
+- Threaded thesis discussions with replies, author removal, thesis-owner moderation, private abuse reports, and reply notifications.
 - Least-privilege `published_theses` view that exposes an explicit public field projection instead of the underlying thesis JSON document.
 
 ### Spreadsheet modeler
@@ -209,6 +210,8 @@ Apply the committed files in `supabase/migrations` in filename order. They are i
 | `drafts` | Created by `202608010003_cloud_drafts.sql`; owner, JSONB content, local identity, version, and timestamps |
 | `analyst_follows` | Created by `202608020001_social_graph.sql`; follower, followed analyst, and timestamp |
 | `thesis_bookmarks` | Created by `202608020001_social_graph.sql`; owner, published thesis, and timestamp |
+| `thesis_comments` | Created by `202608020002_thesis_discussions.sql`; published thesis, author, optional root parent, immutable text, and moderation state |
+| `comment_reports` | Created by `202608020002_thesis_discussions.sql`; private reporter, reason, details, and timestamp |
 
 The resulting data contract is:
 
@@ -216,6 +219,7 @@ The resulting data contract is:
 - Signed-in users can read only their own complete thesis rows.
 - Signed-in users can read only their own drafts; draft writes go through authenticated server routes and use version checks.
 - Signed-in users can manage only their own follows and bookmarks; relationship identities are protected by row-level security.
+- Discussion writes are authenticated server operations; comment text is immutable, removals are retained as moderation records, and reporter identities are never returned publicly.
 - Thesis creation and all post-publication mutations go through authenticated server routes and service-only database functions.
 - Users can insert or update only the profile whose `id` matches their Auth user ID.
 - Profile join dates are sourced from `auth.users.created_at`; owners cannot rewrite them or self-assign verification.
@@ -232,7 +236,7 @@ supabase db push
 
 Review the migrations in a staging project and back up production data before applying them. They preserve the JSONB storage contract, but the integrity migration replaces existing policies on the app-owned `profiles` and `theses` tables and changes thesis write privileges.
 
-For an existing environment that already has migrations through `202608010005`, run `202608020001_social_graph.sql` in the Supabase dashboard’s SQL Editor (or use `supabase db push`) before deploying the social UI. This creates the relationship tables, RLS policies, and notification triggers; it does not modify or delete existing theses.
+For an existing environment that already has migrations through `202608010005`, run `202608020001_social_graph.sql` and `202608020002_thesis_discussions.sql` in filename order in the Supabase dashboard’s SQL Editor (or use `supabase db push`) before deploying the social UI. These create the relationship/discussion tables, RLS boundaries, moderation rules, and notification triggers; they do not modify or delete existing theses.
 
 ### 5. Enable lifecycle scheduling
 
@@ -352,6 +356,9 @@ supabase/migrations/           Versioned database integrity migrations
 | `/api/scheduled-publications/[id]/publish-now` | `POST` | Publish a scheduled/private server draft immediately. |
 | `/api/notifications` | `GET`, `PATCH` | List owner notifications or mark them read. |
 | `/api/social` | `GET`, `POST`, `DELETE` | List or mutate the signed-in user's analyst follows and thesis bookmarks. |
+| `/api/theses/[id]/comments` | `GET`, `POST` | List a public thesis discussion or add an authenticated comment/reply. |
+| `/api/comments/[id]` | `DELETE` | Hide a comment as its author or the thesis owner. |
+| `/api/comments/[id]/report` | `POST` | Privately report a visible comment. |
 | `/api/lifecycle-jobs/[id]/retry` | `POST` | Retry an action-required publication or close job. |
 | `/api/internal/lifecycle` | `POST` | Authenticated Cron worker for scheduled publication and closing. |
 | `/api/internal/refresh` | `POST` | Authenticated Cron worker for 15-minute return and trigger refreshes. |
@@ -407,7 +414,7 @@ Before deploying elsewhere, confirm that the host supports the Node.js runtime u
 
 ## Known limitations
 
-- Every migration, including cloud drafts, cloud profiles, public routes, and the social graph, must be applied to each Supabase environment; committing them does not change a remote database automatically.
+- Every migration, including cloud drafts, cloud profiles, public routes, the social graph, and discussions, must be applied to each Supabase environment; committing them does not change a remote database automatically.
 - DOCX import preserves text structure and basic formatting; embedded images, tables, comments, and complex Word layouts are simplified or omitted.
 - Lifecycle automation depends on the separately configured Supabase Cron jobs; applying the migration alone does not start the workers.
 - Notifications are in-app only and are polled once per minute; email and push delivery are not implemented.
