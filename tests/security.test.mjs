@@ -22,6 +22,12 @@ import { normalizePublicUrl } from '../src/lib/urls.js'
 import { createAsyncCache } from '../src/lib/asyncCache.js'
 import { hydrateProjectedThesis } from '../src/lib/publicTheses.js'
 import {
+  convertDocxBuffer,
+  DOCX_CONTENT_TYPE,
+  prepareImportedDocxHtml,
+  readDocxRequest,
+} from '../src/lib/docxImport.js'
+import {
   buildDiscoverPage,
   buildLeaderboardPage,
   parseDiscoverQuery,
@@ -96,6 +102,50 @@ test('published workbook validation normalizes safe links and rejects unsafe lin
     () => cleanWorkbookModel(minimalModel('javascript:alert(1)')),
     /unsafe hyperlink/,
   )
+})
+
+test('DOCX imports enforce file boundaries and sanitize converted HTML', async () => {
+  const request = new Request('http://localhost/api/import/docx', {
+    method: 'POST',
+    headers: {
+      'content-type': DOCX_CONTENT_TYPE,
+      'x-file-name': encodeURIComponent('Investment thesis.docx'),
+    },
+    body: new Uint8Array([0x50, 0x4b, 0x03, 0x04]),
+  })
+  const upload = await readDocxRequest(request)
+  assert.equal(upload.filename, 'Investment thesis.docx')
+  assert.equal(upload.buffer.length, 4)
+
+  const clean = prepareImportedDocxHtml([
+    '<h1 onclick="bad()">Durable growth</h1>',
+    '<p><strong>Evidence</strong> from filings.</p>',
+    '<a href="javascript:bad()">unsafe</a>',
+    '<script>bad()</script>',
+  ].join(''))
+  assert.equal(clean.wordCount, 6)
+  assert.match(clean.html, /<h1>Durable growth<\/h1>/)
+  assert.doesNotMatch(clean.html, /onclick|javascript:|<script/i)
+
+  await assert.rejects(() => readDocxRequest(new Request('http://localhost/api/import/docx', {
+    method: 'POST',
+    headers: { 'content-type': 'text/plain', 'x-file-name': 'thesis.docx' },
+    body: 'not a document',
+  })), (error) => error.status === 415)
+  await assert.rejects(() => readDocxRequest(new Request('http://localhost/api/import/docx', {
+    method: 'POST',
+    headers: { 'content-type': DOCX_CONTENT_TYPE, 'x-file-name': 'legacy.doc' },
+    body: new Uint8Array([0x50, 0x4b, 0x03, 0x04]),
+  })), /only \.docx files/)
+})
+
+test('DOCX conversion preserves basic Word document structure', async () => {
+  const fixture = await readFile(
+    new URL('../node_modules/mammoth/test/test-data/single-paragraph.docx', import.meta.url),
+  )
+  const imported = await convertDocxBuffer(fixture)
+  assert.equal(imported.html, '<p>Walking on imported air</p>')
+  assert.equal(imported.wordCount, 4)
 })
 
 test('thesis payload validation applies limits, sanitization, and unknown-field rejection', () => {

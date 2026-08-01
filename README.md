@@ -46,6 +46,7 @@ This is still a prototype rather than a production-ready service. See [Known lim
   - Bold, italic, underline, and strikethrough formatting.
   - Headings, paragraphs, block quotes, lists, links, and dividers.
   - Slash-command menu with keyboard navigation.
+- Authenticated `.docx` import with an 8 MB limit, server-side conversion, safe HTML sanitization, drag-and-drop, and a file picker.
 - Debounced, owner-only cloud drafts with optimistic version checks, cross-device access, automatic import of existing browser drafts, and an offline `localStorage` safety copy.
 - Income statement, balance sheet, and cash-flow views with annual and quarterly periods.
 
@@ -132,6 +133,7 @@ The Model tab contains an Excel-style workbook editor built with Handsontable, H
 | Spreadsheet grid | Handsontable |
 | Formula engine | HyperFormula |
 | Excel import/export | `xlsx-js-style` |
+| Word import | Mammoth |
 | Linting | Oxlint |
 | Tests | Node.js test runner |
 
@@ -336,6 +338,7 @@ supabase/migrations/           Versioned database integrity migrations
 | `/api/internal/refresh` | `POST` | Authenticated Cron worker for 15-minute return and trigger refreshes. |
 | `/api/discover` | `GET` | Return a filtered, sorted page from the public community thesis feed. |
 | `/api/leaderboard` | `GET` | Compute and paginate full-portfolio analyst rankings and filters. |
+| `/api/import/docx` | `POST` | Convert an authenticated DOCX upload into sanitized thesis HTML. |
 | `/api/search` | `GET` | Search Yahoo Finance securities. |
 | `/api/quotes` | `GET` | Fetch lightweight quotes for a symbol list. |
 | `/api/cards` | `POST` | Fetch entry/current price data for thesis cards. |
@@ -386,7 +389,7 @@ Before deploying elsewhere, confirm that the host supports the Node.js runtime u
 ## Known limitations
 
 - Every migration, including cloud drafts, cloud profiles, and public routes, must be applied to each Supabase environment; committing them does not change a remote database automatically.
-- Dropping a Word document currently displays import progress messages but does not parse or insert the document.
+- DOCX import preserves text structure and basic formatting; embedded images, tables, comments, and complex Word layouts are simplified or omitted.
 - The rich-text editor uses browser `contentEditable` and `document.execCommand`; it is not backed by Tiptap or another structured editor framework.
 - The editor's embedded-chart command inserts a placeholder block, and the Charts tab does not yet contain a chart builder.
 - Lifecycle automation depends on the separately configured Supabase Cron jobs; applying the migration alone does not start the workers.

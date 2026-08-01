@@ -15,6 +15,8 @@ import { latestMetric, formatMetricValue, triggerLabel, evaluateTrigger, compari
 import TriggerComposer from '../components/TriggerComposer.jsx'
 
 const EMBED_HTML = '<div contenteditable="false" class="my-4 p-4 border rounded" style="border-color: var(--border); background: var(--bg-warm);"><div class="text-[10px] font-mono uppercase tracking-wider" style="color: var(--muted);">Embedded Chart</div><div class="text-sm font-medium mt-1">Revenue &amp; Margin Trajectory</div><div class="text-xs mt-1" style="color: var(--ink-soft);">Linked to model · auto-updates</div></div>'
+const DOCX_MAX_BYTES = 8 * 1024 * 1024
+const DOCX_CONTENT_TYPE = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
 
 const STMT_TABS = [
   { key: 'income', label: 'Income Statement' },
@@ -107,6 +109,7 @@ export default function Editor({ draft = null, navigate, showToast, onOpenPublis
   const [slashQuery, setSlashQuery] = useState('')
   const [slashIndex, setSlashIndex] = useState(0)
   const [dragging, setDragging] = useState(false)
+  const [importingDocument, setImportingDocument] = useState(false)
   const scheduledPublicationId = draft?.scheduledPublicationId || null
   const [localDraftId, setLocalDraftId] = useState(
     scheduledPublicationId ? null : (draft?.localDraftId || (!draft?.cloudDraftId ? draft?.id : null) || null),
@@ -149,6 +152,7 @@ export default function Editor({ draft = null, navigate, showToast, onOpenPublis
   const titleRef = useRef(null)
   const sectorRef = useRef(null)
   const dragCounter = useRef(0)
+  const documentInputRef = useRef(null)
   const stmtSymbol = useRef(null)  // symbol the loaded statements belong to
   const publicationDatePickerRef = useRef(null)
   const localDraftIdRef = useRef(localDraftId)
@@ -449,14 +453,57 @@ export default function Editor({ draft = null, navigate, showToast, onOpenPublis
     return () => document.removeEventListener('click', onClick)
   }, [slash])
 
-  const handleDroppedFile = (file) => {
+  const handleDocumentImport = async (file) => {
     if (!file) return
-    showToast(`Parsing "${file.name}"…`)
-    setTimeout(() => showToast(`Auto-formatted ${file.name} · 2,847 words imported`), 1200)
+    if (!file.name.toLowerCase().endsWith('.docx')) {
+      showToast('Only .docx Word documents are supported.')
+      return
+    }
+    if (!file.size) {
+      showToast('That DOCX file is empty.')
+      return
+    }
+    if (file.size > DOCX_MAX_BYTES) {
+      showToast('DOCX files must be 8 MB or smaller.')
+      return
+    }
+
+    setImportingDocument(true)
+    showToast(`Importing "${file.name}"…`)
+    try {
+      const response = await fetch('/api/import/docx', {
+        method: 'POST',
+        headers: {
+          'content-type': DOCX_CONTENT_TYPE,
+          'x-file-name': encodeURIComponent(file.name),
+        },
+        body: file,
+      })
+      const data = await response.json().catch(() => null)
+      if (!response.ok) throw new Error(data?.error || 'Document import failed')
+
+      const editor = editorRef.current
+      if (!editor) throw new Error('Thesis editor is unavailable')
+      const separator = editor.textContent?.trim() ? '<hr>' : ''
+      editor.insertAdjacentHTML('beforeend', `${separator}${data.html}`)
+      setActiveTab('thesis')
+      markDirty()
+      requestAnimationFrame(() => focusEditor())
+      const warningNote = data.warningCount
+        ? ` · ${data.warningCount} unsupported item${data.warningCount === 1 ? '' : 's'} simplified`
+        : ''
+      showToast(`Imported ${file.name} · ${data.wordCount} word${data.wordCount === 1 ? '' : 's'}${warningNote}`)
+    } catch (error) {
+      showToast(error.message || 'Document import failed')
+    } finally {
+      setImportingDocument(false)
+      if (documentInputRef.current) documentInputRef.current.value = ''
+    }
   }
 
-  // Drag-and-drop of Word documents onto the editor view.
-  const onDragEnter = () => {
+  // Drag-and-drop of DOCX documents onto the editor view.
+  const onDragEnter = (event) => {
+    if (!event.dataTransfer?.types?.includes('Files')) return
     dragCounter.current++
     setDragging(true)
   }
@@ -471,7 +518,8 @@ export default function Editor({ draft = null, navigate, showToast, onOpenPublis
     e.preventDefault()
     dragCounter.current = 0
     setDragging(false)
-    handleDroppedFile(e.dataTransfer.files[0])
+    if (importingDocument) return
+    handleDocumentImport(e.dataTransfer.files[0])
   }
 
   const addTrigger = () => {
@@ -950,14 +998,30 @@ export default function Editor({ draft = null, navigate, showToast, onOpenPublis
             <button type="button" className="editor-command-hint hidden sm:block ml-auto" onClick={openSlashCommands}>
               Type <kbd>/</kbd> for commands
             </button>
+            <button
+              type="button"
+              className="editor-command-hint whitespace-nowrap sm:ml-2"
+              onClick={() => documentInputRef.current?.click()}
+              disabled={importingDocument}
+              title="Import a Word DOCX document"
+            >
+              <i className="icon-file-text text-xs mr-1"></i>{importingDocument ? 'Importing…' : 'Import DOCX'}
+            </button>
+            <input
+              ref={documentInputRef}
+              type="file"
+              accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+              className="hidden"
+              onChange={(event) => handleDocumentImport(event.target.files?.[0])}
+            />
           </div>
 
           {dragging && (
             <div className="absolute inset-0 z-30 flex items-center justify-center pointer-events-none" style={{ background: 'rgba(255,255,255,0.9)' }}>
               <div className="drop-zone dragging p-12 rounded-lg text-center">
                 <i className="icon-file-text text-3xl" style={{ color: 'var(--ink)' }}></i>
-                <p className="font-serif text-xl mt-3">Drop Word document to auto-format</p>
-                <p className="text-xs font-mono mt-1" style={{ color: 'var(--muted)' }}>.docx · .doc · .rtf supported</p>
+                <p className="font-serif text-xl mt-3">Drop DOCX document to import</p>
+                <p className="text-xs font-mono mt-1" style={{ color: 'var(--muted)' }}>.docx · up to 8 MB</p>
               </div>
             </div>
           )}
