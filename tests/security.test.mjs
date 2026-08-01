@@ -2,7 +2,6 @@ import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import test from 'node:test'
 import { generateHTML, generateJSON } from '@tiptap/html/server'
-import nextConfig from '../next.config.mjs'
 import {
   cleanWorkbookModel,
   isCalendarDate,
@@ -46,6 +45,11 @@ import {
   rateLimitFailure,
   resetRateLimitsForTests,
 } from '../src/lib/rateLimit.js'
+import {
+  applySecurityHeaders,
+  buildContentSecurityPolicy,
+  createRequestNonce,
+} from '../src/lib/securityHeaders.js'
 
 const minimalModel = (link) => ({
   filename: 'Model.xlsx',
@@ -393,14 +397,29 @@ test('JSON request reader enforces content type and actual byte size', async () 
   await assert.rejects(() => readJsonObject(oversized, 50), (error) => error.status === 413)
 })
 
-test('application responses include the baseline browser security headers', async () => {
-  const rules = await nextConfig.headers()
-  const headers = Object.fromEntries(rules[0].headers.map(({ key, value }) => [key, value]))
-  assert.match(headers['Content-Security-Policy'], /object-src 'none'/)
-  assert.match(headers['Content-Security-Policy'], /frame-ancestors 'none'/)
-  assert.equal(headers['X-Content-Type-Options'], 'nosniff')
-  assert.equal(headers['X-Frame-Options'], 'DENY')
-  assert.equal(headers['Referrer-Policy'], 'strict-origin-when-cross-origin')
+test('proxy CSP uses per-request script nonces and applies baseline security headers', async () => {
+  assert.notEqual(createRequestNonce(), createRequestNonce())
+  const nonce = 'dGVzdC1ub25jZQ=='
+  const policy = buildContentSecurityPolicy(nonce, { development: false })
+  const scriptPolicy = policy.split('; ').find((directive) => directive.startsWith('script-src'))
+  assert.match(scriptPolicy, /'nonce-dGVzdC1ub25jZQ=='/)
+  assert.match(scriptPolicy, /'strict-dynamic'/)
+  assert.doesNotMatch(scriptPolicy, /'unsafe-inline'|'unsafe-eval'/)
+  assert.match(policy, /object-src 'none'/)
+  assert.match(policy, /frame-ancestors 'none'/)
+  assert.match(buildContentSecurityPolicy(nonce, { development: true }), /script-src[^;]+'unsafe-eval'/)
+
+  const response = new Response()
+  applySecurityHeaders(response, policy, { production: true })
+  assert.equal(response.headers.get('Content-Security-Policy'), policy)
+  assert.equal(response.headers.get('X-Content-Type-Options'), 'nosniff')
+  assert.equal(response.headers.get('X-Frame-Options'), 'DENY')
+  assert.equal(response.headers.get('Referrer-Policy'), 'strict-origin-when-cross-origin')
+  assert.match(response.headers.get('Strict-Transport-Security'), /includeSubDomains/)
+
+  const proxySource = await readFile(new URL('../proxy.js', import.meta.url), 'utf8')
+  assert.match(proxySource, /export async function proxy\(/)
+  assert.match(proxySource, /requestHeaders\.set\('x-nonce', nonce\)/)
 })
 
 test('async provider cache deduplicates in-flight work and never stores failures', async () => {

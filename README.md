@@ -29,7 +29,7 @@ This is still a prototype rather than a production-ready service. See [Known lim
 
 - Guest-first public browsing; the home page does not require an account.
 - Dedicated `/sign-in` page linked from the bottom of the guest sidebar.
-- Supabase SSR authentication with session-cookie refresh middleware.
+- Supabase SSR authentication with session-cookie refresh through the Next.js request proxy.
 - Email/password sign-in and account creation.
 - Optional email confirmation through `/auth/confirm`.
 - Google OAuth through `/auth/callback`.
@@ -400,6 +400,7 @@ Before deploying elsewhere, confirm that the host supports the Node.js runtime u
 - Notifications are in-app only and are polled once per minute; email and push delivery are not implemented.
 - Market data is dependent on Yahoo Finance availability and is polled rather than streamed.
 - Public request limiting is process-local; configure a shared deployment-edge limit for multi-instance production enforcement.
+- Script execution uses per-request CSP nonces without `script-src 'unsafe-inline'`; `style-src 'unsafe-inline'` remains for the current React style attributes.
 - Automated tests do not yet exercise Supabase policies/functions against a disposable database or cover an authenticated browser publish-to-close workflow.
 
 ## License

@@ -1,4 +1,5 @@
 import './globals.css'
+import { connection } from 'next/server'
 
 const deploymentHost = process.env.VERCEL_PROJECT_PRODUCTION_URL || process.env.VERCEL_URL
 const metadataOrigin = process.env.NEXT_PUBLIC_SITE_URL
@@ -29,7 +30,10 @@ export const viewport = {
   viewportFit: 'cover',
 }
 
-export default function RootLayout({ children }) {
+export default async function RootLayout({ children }) {
+  // Nonce-based CSP is request-specific, so every document must be rendered
+  // with access to the incoming request rather than emitted as a static shell.
+  await connection()
   return (
     <html lang="en">
       <head>

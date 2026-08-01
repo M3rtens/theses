@@ -89,7 +89,16 @@ test.beforeEach(async ({ page }) => {
 })
 
 test('guest can page and search Discover, then filter the leaderboard', async ({ page }) => {
-  await page.goto('/')
+  const response = await page.goto('/')
+  const policy = response.headers()['content-security-policy']
+  const nonce = policy.match(/'nonce-([^']+)'/)?.[1]
+  expect(nonce).toBeTruthy()
+  const secondPolicy = (await page.request.get('/')).headers()['content-security-policy']
+  expect(secondPolicy.match(/'nonce-([^']+)'/)?.[1]).not.toBe(nonce)
+  expect(policy.split('; ').find((directive) => directive.startsWith('script-src'))).not.toContain("'unsafe-inline'")
+  const frameworkNonces = await page.locator('script[src*="/_next/"]').evaluateAll((scripts) => scripts.map((script) => script.nonce))
+  expect(frameworkNonces.length).toBeGreaterThan(0)
+  expect(frameworkNonces.every((value) => value === nonce)).toBe(true)
 
   await expect(page.getByRole('heading', { name: 'Discover' })).toBeVisible()
   await expect(page.getByRole('link', { name: 'Durable software growth' })).toHaveAttribute('href', '/theses/1')
