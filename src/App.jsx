@@ -137,7 +137,13 @@ export default function App() {
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`)
-      if (pendingDraft.draftId) deleteDraft(pendingDraft.draftId, user?.id)
+      const localDraftId = pendingDraft.localDraftId || pendingDraft.draftId
+      if (localDraftId) deleteDraft(localDraftId, user?.id)
+      if (pendingDraft.cloudDraftId) {
+        // Publication already succeeded, so draft cleanup is deliberately
+        // best-effort and cannot roll the publication back.
+        await fetch(`/api/drafts/${pendingDraft.cloudDraftId}`, { method: 'DELETE' }).catch(() => null)
+      }
       setPublishOpen(false)
       setPendingDraft(null)
       refresh()

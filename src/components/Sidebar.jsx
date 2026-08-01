@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { loadDrafts } from '../lib/drafts.js'
 import { createClient } from '../lib/supabase/client'
 import { useData } from './DataProvider.jsx'
 import { useUser } from './UserProvider.jsx'
@@ -21,7 +20,7 @@ const NAV_COMMUNITY = [
 export default function Sidebar({ view, navigate }) {
   const navClass = (target) => `nav-item ${view === target ? 'active' : ''} cursor-pointer flex items-center gap-2.5 py-1`
   const user = useUser()
-  const { stored, scheduled, notifications } = useData()
+  const { stored, drafts, scheduled, notifications } = useData()
   const router = useRouter()
   const [mobileOpen, setMobileOpen] = useState(false)
 
@@ -48,21 +47,11 @@ export default function Sidebar({ view, navigate }) {
     }
   }, [mobileOpen])
 
-  // Owner-scoped workspace data is never requested for guests.
-  const [draftCount, setDraftCount] = useState(0)
-  useEffect(() => {
-    if (!user?.id) {
-      setDraftCount(0)
-      return
-    }
-    setDraftCount(loadDrafts(user.id).length + scheduled.length)
-  }, [view, user?.id, scheduled.length])
-
   const allTheses = useMemo(() => stored, [stored])
   const unreadCount = notifications.filter((notification) => !notification.readAt).length
   const counts = {
     mytheses: allTheses.length,
-    drafts: draftCount,
+    drafts: drafts.length + scheduled.length,
     notifications: unreadCount,
   }
   const alertCount = useMemo(() => allTheses.reduce((count, thesis) => (

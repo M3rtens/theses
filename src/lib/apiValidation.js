@@ -15,6 +15,7 @@ const MAX_MODEL_BYTES = 1_750_000
 
 export const REQUEST_LIMITS = {
   publish: 2_000_000,
+  draft: 2_000_000,
   update: 16_000,
   lifecycle: 4_000,
   cards: 64_000,
@@ -142,6 +143,53 @@ function cleanTriggers(value) {
   })
 }
 
+function cleanDraftTriggers(value) {
+  if (value == null) return []
+  if (!Array.isArray(value)) fail('triggers must be an array')
+  if (value.length > 20) fail('no more than 20 triggers are allowed')
+
+  return value.map((trigger, triggerIndex) => {
+    if (!isPlainObject(trigger)) fail(`trigger ${triggerIndex + 1} must be an object`)
+    const rawComparisons = Array.isArray(trigger.comparisons)
+      ? trigger.comparisons
+      : (trigger.value == null ? [] : [{ op: trigger.op, value: trigger.value, scale: trigger.scale }])
+    if (rawComparisons.length > 5) fail(`trigger ${triggerIndex + 1} has too many comparisons`)
+    const comparisons = rawComparisons.map((comparison, comparisonIndex) => {
+      if (!isPlainObject(comparison)) fail(`trigger ${triggerIndex + 1} comparison ${comparisonIndex + 1} must be an object`)
+      const rawValue = comparison.value
+      const number = rawValue == null || rawValue === '' ? null : Number(rawValue)
+      if (number != null && !Number.isFinite(number)) {
+        fail(`trigger ${triggerIndex + 1} has a non-finite threshold`)
+      }
+      return {
+        op: OPS.has(comparison.op) ? comparison.op : '<',
+        value: number,
+        scale: SCALES.has(comparison.scale) ? comparison.scale : 'M',
+        connector: comparisonIndex === 0 ? null : (comparison.connector === 'or' ? 'or' : 'and'),
+      }
+    })
+    const first = comparisons[0] || {}
+    return {
+      c: cleanString(trigger.c ?? trigger.condition, {
+        label: `trigger ${triggerIndex + 1} condition`,
+        max: 500,
+        fallback: 'Incomplete trigger',
+      }),
+      s: TRIGGER_STATUS.has(trigger.s) ? trigger.s : 'clear',
+      metric: cleanString(trigger.metric, { label: `trigger ${triggerIndex + 1} metric`, max: 200 }),
+      statement: STATEMENTS.has(trigger.statement) ? trigger.statement : 'income',
+      period: PERIODS.has(trigger.period) ? trigger.period : 'annual',
+      kind: KINDS.has(trigger.kind) ? trigger.kind : 'money',
+      currency: cleanString(trigger.currency, { label: `trigger ${triggerIndex + 1} currency`, max: 12 }),
+      comparisons,
+      connectors: comparisons.slice(1).map((comparison) => comparison.connector || 'and'),
+      op: first.op || (OPS.has(trigger.op) ? trigger.op : '<'),
+      value: first.value ?? null,
+      scale: first.scale || (SCALES.has(trigger.scale) ? trigger.scale : 'M'),
+    }
+  })
+}
+
 function cleanCellValue(value, label) {
   if (value == null || typeof value === 'number' || typeof value === 'boolean') return value
   if (typeof value !== 'string') fail(`${label} must be text, a number, a boolean, or null`)
@@ -251,7 +299,11 @@ export function cleanWorkbookModel(value) {
 }
 
 export function validateThesisPayload(body) {
-  assertAllowedKeys(body, new Set(['title', 'ticker', 'company', 'sector', 'side', 'body', 'triggers', 'model', 'scheduledPublicationDate', 'draftId', 'scheduledPublicationId']), 'thesis')
+  assertAllowedKeys(body, new Set([
+    'title', 'ticker', 'company', 'sector', 'side', 'body', 'triggers', 'model',
+    'scheduledPublicationDate', 'draftId', 'localDraftId', 'cloudDraftId',
+    'cloudDraftVersion', 'scheduledPublicationId',
+  ]), 'thesis')
   const side = cleanString(body.side, { label: 'side', max: 8, required: true }).toLowerCase()
   if (!SIDES.has(side)) fail('side must be "bull" or "bear"')
 
@@ -268,6 +320,63 @@ export function validateThesisPayload(body) {
     triggers: cleanTriggers(body.triggers),
     model: cleanWorkbookModel(body.model),
   }
+}
+
+export function validateDraftPayload(body) {
+  if (!isPlainObject(body)) fail('draft must be an object')
+  assertAllowedKeys(body, new Set([
+    'title', 'ticker', 'company', 'sector', 'side', 'body', 'triggers', 'model',
+    'scheduledPublicationDate', 'draftId', 'localDraftId', 'cloudDraftId',
+    'cloudDraftVersion', 'wordCount', 'triggersCount', 'savedAt', 'syncedAt',
+  ]), 'draft')
+
+  const html = typeof body.body === 'string' ? body.body : ''
+  if (byteLength(html) > 200_000) fail('body is too large', 413)
+  const rawTicker = cleanString(body.ticker, { label: 'ticker', max: 64 })
+  const ticker = rawTicker && !['-', '–', '—'].includes(rawTicker)
+    ? normalizeSymbol(rawTicker, 'ticker')
+    : ''
+  const scheduledDate = body.scheduledPublicationDate == null || body.scheduledPublicationDate === ''
+    ? null
+    : String(body.scheduledPublicationDate)
+  if (scheduledDate && !isCalendarDate(scheduledDate)) {
+    fail('scheduledPublicationDate must be a real calendar date in YYYY-MM-DD format')
+  }
+
+  return {
+    title: cleanString(body.title, { label: 'title', max: 200 }),
+    ticker,
+    company: cleanString(body.company, { label: 'company', max: 200 }),
+    sector: cleanString(body.sector, { label: 'sector', max: 100 }),
+    side: SIDES.has(String(body.side || '').toLowerCase()) ? String(body.side).toLowerCase() : 'bull',
+    body: sanitizeThesisHtml(html),
+    triggers: cleanDraftTriggers(body.triggers),
+    model: cleanWorkbookModel(body.model),
+    scheduledPublicationDate: scheduledDate,
+  }
+}
+
+const LOCAL_DRAFT_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$/
+
+function cleanLocalDraftId(value) {
+  const localId = cleanString(value, { label: 'localId', max: 160, required: true })
+  if (!LOCAL_DRAFT_ID.test(localId)) fail('localId contains unsupported characters')
+  return localId
+}
+
+export function validateDraftCreatePayload(body) {
+  assertAllowedKeys(body, new Set(['draft', 'localId']), 'draft request')
+  return {
+    draft: validateDraftPayload(body.draft),
+    localId: cleanLocalDraftId(body.localId),
+  }
+}
+
+export function validateDraftUpdatePayload(body) {
+  assertAllowedKeys(body, new Set(['draft', 'version']), 'draft request')
+  const version = Number(body.version)
+  if (!Number.isSafeInteger(version) || version < 1) fail('version must be a positive integer')
+  return { draft: validateDraftPayload(body.draft), version }
 }
 
 export function validateScheduledPublicationPayload(body) {

@@ -1,19 +1,12 @@
-// Client-side draft persistence. Drafts live in localStorage until published;
-// publishing goes through /api/theses and is handled separately. Kept in one
-// place so the Editor (writer) and the Drafts view (reader) stay in sync.
-//
-// Drafts are namespaced per user id, so two accounts signing in on the same
-// browser don't see each other's drafts. Callers pass the signed-in user's id.
+// Browser storage is an offline cache for cloud drafts. Drafts are namespaced
+// per user so accounts sharing a browser never see one another's work.
 const keyFor = (userId) => `theses.drafts::${userId || 'anon'}`
 
-// Count words in the thesis body by stripping HTML down to text.
 const wordCount = (html) => {
   const text = (html || '').replace(/<[^>]*>/g, ' ').replace(/&[a-z]+;/gi, ' ')
-  const words = text.trim().split(/\s+/).filter(Boolean)
-  return words.length
+  return text.trim().split(/\s+/).filter(Boolean).length
 }
 
-// Render a savedAt timestamp as the relative label the draft cards show.
 export const relativeTime = (ts) => {
   const diff = Date.now() - ts
   const min = Math.floor(diff / 60000)
@@ -26,8 +19,6 @@ export const relativeTime = (ts) => {
   return `${Math.floor(days / 7)} week${days >= 14 ? 's' : ''} ago`
 }
 
-// Read all saved drafts for a user, newest first. Never throws — a corrupt
-// store yields [].
 export const loadDrafts = (userId) => {
   try {
     const raw = localStorage.getItem(keyFor(userId))
@@ -38,26 +29,24 @@ export const loadDrafts = (userId) => {
   }
 }
 
-// Remove a saved draft by id. Returns the remaining drafts (newest first), or
-// the current list unchanged if storage is unavailable.
 export const deleteDraft = (id, userId) => {
-  const next = loadDrafts(userId).filter((d) => d.id !== id)
+  const next = loadDrafts(userId).filter((draft) => draft.id !== id)
   try {
     localStorage.setItem(keyFor(userId), JSON.stringify(next))
   } catch {
-    // Storage unavailable — nothing removed.
+    // Keep the in-memory result useful even when storage is unavailable.
   }
   return next
 }
 
-// Persist a draft built by the editor. Reuses the row for a given id if present
-// (re-saving an open draft), otherwise appends a new one. Returns the saved row.
-export const saveDraft = (thesis, id, userId) => {
+export const saveDraft = (thesis, id, userId, metadata = {}) => {
   const list = loadDrafts(userId)
+  const draftId = id || `d-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+  const existing = list.find((draft) => draft.id === draftId) || {}
   const row = {
-    id: id || `d-${Date.now()}`,
-    title: thesis.title || 'Untitled thesis',
-    ticker: thesis.ticker || '—',
+    id: draftId,
+    title: thesis.title || '',
+    ticker: thesis.ticker || '',
     company: thesis.company || '',
     sector: thesis.sector || '',
     side: thesis.side || 'bull',
@@ -68,13 +57,51 @@ export const saveDraft = (thesis, id, userId) => {
     wordCount: wordCount(thesis.body),
     triggersCount: (thesis.triggers || []).length,
     savedAt: Date.now(),
+    cloudDraftId: metadata.cloudDraftId ?? thesis.cloudDraftId ?? existing.cloudDraftId ?? null,
+    cloudDraftVersion: metadata.cloudDraftVersion ?? thesis.cloudDraftVersion ?? existing.cloudDraftVersion ?? null,
+    syncedAt: metadata.syncedAt ?? existing.syncedAt ?? null,
+    dirty: true,
   }
-  const next = [row, ...list.filter((d) => d.id !== row.id)]
+  const next = [row, ...list.filter((draft) => draft.id !== row.id)]
   try {
     localStorage.setItem(keyFor(userId), JSON.stringify(next))
   } catch {
-    // Storage unavailable (private mode / quota) — surfaced by caller via toast.
     return null
   }
   return row
 }
+
+export const markDraftSynced = (id, userId, cloudDraft) => {
+  const list = loadDrafts(userId)
+  const existing = list.find((draft) => draft.id === id)
+  if (!existing) return null
+
+  const syncedAt = Date.now()
+  const row = {
+    ...existing,
+    cloudDraftId: cloudDraft.cloudDraftId,
+    cloudDraftVersion: cloudDraft.cloudDraftVersion,
+    syncedAt,
+    dirty: false,
+    savedAt: Number(new Date(cloudDraft.savedAt)) || existing.savedAt,
+  }
+  const next = [row, ...list.filter((draft) => draft.id !== id)]
+  try {
+    localStorage.setItem(keyFor(userId), JSON.stringify(next))
+  } catch {
+    return null
+  }
+  return row
+}
+
+export const isDraftDirty = (draft) => typeof draft.dirty === 'boolean'
+  ? draft.dirty
+  : (!draft.syncedAt || draft.savedAt > draft.syncedAt)
+
+export const hasDraftContent = (draft) => Boolean(
+  draft?.title?.trim()
+  || draft?.ticker?.trim()
+  || draft?.body?.replace(/<[^>]*>/g, '').trim()
+  || draft?.triggers?.length
+  || draft?.model,
+)

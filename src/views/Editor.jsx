@@ -1,9 +1,15 @@
 import { useEffect, useRef, useState } from 'react'
 import SecuritySearch from '../components/SecuritySearch.jsx'
 import { useUser } from '../components/UserProvider.jsx'
+import { useData } from '../components/DataProvider.jsx'
 import { SECTORS } from '../lib/sectors.js'
 import { fmtPrice, currencySymbol } from '../lib/format.js'
-import { saveDraft as persistDraft } from '../lib/drafts.js'
+import {
+  deleteDraft as deleteLocalDraft,
+  hasDraftContent,
+  markDraftSynced,
+  saveDraft as persistLocalDraft,
+} from '../lib/drafts.js'
 import SpreadsheetEditor from '../components/SpreadsheetEditor.jsx'
 import { latestMetric, formatMetricValue, triggerLabel, evaluateTrigger, comparisonsOf } from '../lib/triggers.js'
 import TriggerComposer from '../components/TriggerComposer.jsx'
@@ -61,8 +67,20 @@ const formatPublicationDate = (value) => dateFromValue(value).toLocaleDateString
 
 const WEEKDAYS = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su']
 
+async function readDraftResponse(response) {
+  const data = await response.json().catch(() => null)
+  if (!response.ok) {
+    const error = new Error(data?.error || `HTTP ${response.status}`)
+    error.status = response.status
+    error.current = data?.current
+    throw error
+  }
+  return data
+}
+
 export default function Editor({ draft = null, navigate, showToast, onOpenPublish }) {
   const user = useUser()
+  const { loadDrafts } = useData()
   // Rebuild the internal trigger shape from a saved draft's structured rows.
   const draftTriggers = draft?.triggers?.length
     ? draft.triggers.map((t, i) => ({
@@ -89,8 +107,16 @@ export default function Editor({ draft = null, navigate, showToast, onOpenPublis
   const [slashQuery, setSlashQuery] = useState('')
   const [slashIndex, setSlashIndex] = useState(0)
   const [dragging, setDragging] = useState(false)
-  const [draftId, setDraftId] = useState(draft?.id || null)
   const scheduledPublicationId = draft?.scheduledPublicationId || null
+  const [localDraftId, setLocalDraftId] = useState(
+    scheduledPublicationId ? null : (draft?.localDraftId || (!draft?.cloudDraftId ? draft?.id : null) || null),
+  )
+  const [cloudDraftId, setCloudDraftId] = useState(draft?.cloudDraftId || null)
+  const [cloudDraftVersion, setCloudDraftVersion] = useState(draft?.cloudDraftVersion || null)
+  const [saveStatus, setSaveStatus] = useState(() => (
+    scheduledPublicationId || draft?.cloudDraftId ? 'saved' : draft?.offline ? 'offline' : 'idle'
+  ))
+  const [editRevision, setEditRevision] = useState(0)
   const [security, setSecurity] = useState(() => {
     if (draft) {
       return draft.ticker && draft.ticker !== '—'
@@ -125,6 +151,19 @@ export default function Editor({ draft = null, navigate, showToast, onOpenPublis
   const dragCounter = useRef(0)
   const stmtSymbol = useRef(null)  // symbol the loaded statements belong to
   const publicationDatePickerRef = useRef(null)
+  const localDraftIdRef = useRef(localDraftId)
+  const cloudDraftIdRef = useRef(cloudDraftId)
+  const cloudDraftVersionRef = useRef(cloudDraftVersion)
+  const saveQueueRef = useRef(Promise.resolve())
+  const autosaveRef = useRef(null)
+  const latestDraftRef = useRef(null)
+  const editRevisionRef = useRef(0)
+  const lastLocalRevisionRef = useRef(0)
+
+  const markDirty = () => {
+    editRevisionRef.current += 1
+    setEditRevision(editRevisionRef.current)
+  }
 
   useEffect(() => {
     if (!publicationCalendarOpen) return
@@ -231,7 +270,7 @@ export default function Editor({ draft = null, navigate, showToast, onOpenPublis
     scheduledPublicationDate: useFuturePublication ? scheduledPublicationDate : null,
   })
 
-  const openPublish = () => {
+  const openPublish = async () => {
     const draft = buildThesis()
     if (!draft.title || !draft.ticker) {
       showToast('Add a title and select a security before publishing.')
@@ -241,11 +280,17 @@ export default function Editor({ draft = null, navigate, showToast, onOpenPublis
       showToast('Finish each trigger — pick a line item and enter a threshold — or remove it before publishing.')
       return
     }
+    // Flush any queued autosave first so successful publication can clean up
+    // the exact cloud row, including a draft that was just created.
+    if (!scheduledPublicationId) await queueOrdinarySave(draft)
     // Carry the draft id (if this thesis was saved as a draft) so it can be
     // removed once publishing succeeds. The create API ignores this field.
     onOpenPublish({
       ...draft,
-      draftId: scheduledPublicationId ? null : draftId,
+      draftId: scheduledPublicationId ? null : localDraftIdRef.current,
+      localDraftId: scheduledPublicationId ? null : localDraftIdRef.current,
+      cloudDraftId: scheduledPublicationId ? null : cloudDraftIdRef.current,
+      cloudDraftVersion: scheduledPublicationId ? null : cloudDraftVersionRef.current,
       scheduledPublicationId,
     })
   }
@@ -260,10 +305,17 @@ export default function Editor({ draft = null, navigate, showToast, onOpenPublis
   const format = (command, value = null) => {
     document.execCommand(command, false, value)
     editorRef.current?.focus()
+    markDirty()
   }
 
-  const insertDivider = () => document.execCommand('insertHorizontalRule')
-  const insertEmbed = () => document.execCommand('insertHTML', false, EMBED_HTML)
+  const insertDivider = () => {
+    document.execCommand('insertHorizontalRule')
+    markDirty()
+  }
+  const insertEmbed = () => {
+    document.execCommand('insertHTML', false, EMBED_HTML)
+    markDirty()
+  }
 
   const focusEditor = () => {
     const editor = editorRef.current
@@ -281,6 +333,7 @@ export default function Editor({ draft = null, navigate, showToast, onOpenPublis
   const openSlashCommands = () => {
     focusEditor()
     document.execCommand('insertText', false, '/')
+    markDirty()
     requestAnimationFrame(onEditorInput)
   }
 
@@ -429,16 +482,128 @@ export default function Editor({ draft = null, navigate, showToast, onOpenPublis
       }, 0) + 1
       return [...prev, { id, metric: '', statement: 'income', kind: 'money', period: '', currency: statements?.currency || '', comparisons: [], connectors: [] }]
     })
+    markDirty()
   }
-  const removeTrigger = (id) => setTriggers(prev => prev.filter(t => t.id !== id))
+  const removeTrigger = (id) => {
+    setTriggers(prev => prev.filter(t => t.id !== id))
+    markDirty()
+  }
 
   // The composer emits the fully structured trigger; merge it back, keeping id.
-  const updateTriggerFromComposer = (id, structured) => setTriggers(prev => prev.map(t => t.id === id ? { ...structured, id } : t))
+  const updateTriggerFromComposer = (id, structured) => {
+    setTriggers(prev => prev.map(t => t.id === id ? { ...structured, id } : t))
+    markDirty()
+  }
+
+  const persistOrdinaryDraft = async (built, manual, revision) => {
+    if (!user?.id || !hasDraftContent(built)) return null
+    setSaveStatus('saving')
+
+    const local = persistLocalDraft(built, localDraftIdRef.current, user.id, {
+      cloudDraftId: cloudDraftIdRef.current,
+      cloudDraftVersion: cloudDraftVersionRef.current,
+    })
+    if (!local) {
+      setSaveStatus('error')
+      if (manual) showToast('Could not save the browser safety copy.')
+      return null
+    }
+    localDraftIdRef.current = local.id
+    setLocalDraftId(local.id)
+    lastLocalRevisionRef.current = Math.max(lastLocalRevisionRef.current, revision)
+
+    const acceptCloud = (saved, localId = local.id) => {
+      cloudDraftIdRef.current = saved.cloudDraftId
+      cloudDraftVersionRef.current = saved.cloudDraftVersion
+      setCloudDraftId(saved.cloudDraftId)
+      setCloudDraftVersion(saved.cloudDraftVersion)
+      markDraftSynced(localId, user.id, saved)
+      setSaveStatus('saved')
+      return saved
+    }
+
+    const createCloud = async (draftToCreate, localId) => readDraftResponse(await fetch('/api/drafts', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ draft: draftToCreate, localId }),
+    }))
+
+    try {
+      const wasNew = !cloudDraftIdRef.current
+      const saved = cloudDraftIdRef.current
+        ? await readDraftResponse(await fetch(`/api/drafts/${cloudDraftIdRef.current}`, {
+            method: 'PATCH',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ draft: built, version: cloudDraftVersionRef.current || 1 }),
+          }))
+        : await createCloud(built, local.id)
+      acceptCloud(saved)
+      if (wasNew) loadDrafts()
+      if (manual) showToast(`Draft saved to the cloud at ${new Date().toLocaleTimeString()}.`)
+      return saved
+    } catch (error) {
+      if (error.status !== 409 || !error.current) {
+        setSaveStatus('offline')
+        if (manual) showToast('Cloud unavailable — draft saved safely in this browser.')
+        return null
+      }
+
+      // The remote draft moved to a newer version. Restore that version under
+      // its original identity, then continue the current editor as a new copy.
+      const originalLocalId = local.id
+      persistLocalDraft(error.current, originalLocalId, user.id, {
+        cloudDraftId: error.current.cloudDraftId,
+        cloudDraftVersion: error.current.cloudDraftVersion,
+      })
+      markDraftSynced(originalLocalId, user.id, error.current)
+
+      const conflictId = `d-${Date.now()}-conflict-${Math.random().toString(36).slice(2, 7)}`
+      const conflictDraft = {
+        ...built,
+        title: `${built.title || 'Untitled thesis'} (conflict copy)`,
+      }
+      if (titleRef.current) titleRef.current.value = conflictDraft.title
+      const conflictLocal = persistLocalDraft(conflictDraft, conflictId, user.id, {
+        cloudDraftId: null,
+        cloudDraftVersion: null,
+        syncedAt: null,
+      })
+      localDraftIdRef.current = conflictId
+      cloudDraftIdRef.current = null
+      cloudDraftVersionRef.current = null
+      setLocalDraftId(conflictId)
+      setCloudDraftId(null)
+      setCloudDraftVersion(null)
+
+      try {
+        const saved = await createCloud(conflictDraft, conflictId)
+        acceptCloud(saved, conflictId)
+        setSaveStatus('conflict')
+        showToast('Another device changed this draft. Your edit was preserved as a conflict copy.')
+        loadDrafts()
+        return saved
+      } catch {
+        if (!conflictLocal) deleteLocalDraft(conflictId, user.id)
+        setSaveStatus('offline')
+        showToast('Another device changed this draft. Your conflict copy is saved in this browser.')
+        return null
+      }
+    }
+  }
+
+  const queueOrdinarySave = (built, manual = false) => {
+    const revision = editRevisionRef.current
+    const task = saveQueueRef.current
+      .catch(() => null)
+      .then(() => persistOrdinaryDraft(built, manual, revision))
+    saveQueueRef.current = task
+    return task
+  }
 
   const saveDraft = async () => {
     const built = buildThesis()
-    if (!built.title && !built.ticker) {
-      showToast('Add a title or select a security before saving.')
+    if (!hasDraftContent(built)) {
+      showToast('Add some draft content before saving.')
       return
     }
     if (scheduledPublicationId) {
@@ -446,6 +611,7 @@ export default function Editor({ draft = null, navigate, showToast, onOpenPublis
         ? built
         : { ...built, scheduledPublicationDate }
       try {
+        setSaveStatus('saving')
         const response = await fetch(`/api/scheduled-publications/${scheduledPublicationId}`, {
           method: 'PATCH',
           headers: { 'content-type': 'application/json' },
@@ -456,21 +622,36 @@ export default function Editor({ draft = null, navigate, showToast, onOpenPublis
         })
         const saved = await response.json()
         if (!response.ok) throw new Error(saved?.error || `HTTP ${response.status}`)
+        setSaveStatus('saved')
         showToast(useFuturePublication ? 'Scheduled publication updated.' : 'Private server draft saved.')
       } catch (error) {
+        setSaveStatus('error')
         showToast(`Could not save scheduled draft: ${error.message}`)
       }
       return
     }
 
-    const saved = persistDraft(built, draftId, user?.id)
-    if (!saved) {
-      showToast('Could not save draft — local storage is unavailable.')
-      return
-    }
-    setDraftId(saved.id)
-    showToast('Draft saved · ' + new Date().toLocaleTimeString())
+    await queueOrdinarySave(built, true)
   }
+
+  latestDraftRef.current = buildThesis()
+  autosaveRef.current = () => queueOrdinarySave(buildThesis())
+
+  useEffect(() => {
+    if (!editRevision || scheduledPublicationId) return undefined
+    const timer = setTimeout(() => autosaveRef.current?.(), 1600)
+    return () => clearTimeout(timer)
+  }, [editRevision, scheduledPublicationId])
+
+  useEffect(() => () => {
+    if (scheduledPublicationId || !user?.id || editRevisionRef.current <= lastLocalRevisionRef.current) return
+    const latest = latestDraftRef.current
+    if (!hasDraftContent(latest)) return
+    persistLocalDraft(latest, localDraftIdRef.current, user.id, {
+      cloudDraftId: cloudDraftIdRef.current,
+      cloudDraftVersion: cloudDraftVersionRef.current,
+    })
+  }, [scheduledPublicationId, user?.id])
 
   const sideBox = (active, color) => active
     ? { borderColor: `var(--${color})`, background: `var(--${color}-soft)` }
@@ -479,6 +660,14 @@ export default function Editor({ draft = null, navigate, showToast, onOpenPublis
   const bearTextColor = side === 'bear' ? 'var(--bear)' : 'var(--ink-soft)'
 
   const tabHidden = (tab) => activeTab === tab ? '' : 'hidden'
+  const saveStatusText = {
+    idle: 'Autosave ready',
+    saving: 'Saving…',
+    saved: scheduledPublicationId ? 'Scheduled draft saved' : `Cloud saved${cloudDraftVersion ? ` · v${cloudDraftVersion}` : ''}`,
+    offline: 'Saved in this browser · waiting for cloud',
+    conflict: 'Cloud saved as a conflict copy',
+    error: 'Save failed',
+  }[saveStatus]
 
   const todayValue = localDateValue()
   const today = dateFromValue(todayValue)
@@ -501,21 +690,22 @@ export default function Editor({ draft = null, navigate, showToast, onOpenPublis
   const choosePublicationDate = (value) => {
     setScheduledPublicationDate(value)
     setPublicationCalendarOpen(false)
+    markDirty()
   }
 
   return (
-    <div onDragEnter={onDragEnter} onDragLeave={onDragLeave} onDragOver={(e) => e.preventDefault()} onDrop={onDrop}>
+    <div onInputCapture={markDirty} onChangeCapture={markDirty} onDragEnter={onDragEnter} onDragLeave={onDragLeave} onDragOver={(e) => e.preventDefault()} onDrop={onDrop}>
       <header className="px-4 pt-5 pb-5 sm:px-6 sm:pt-8 lg:px-12 border-b flex flex-col items-stretch gap-4 sm:flex-row sm:items-center sm:justify-between" style={{ borderColor: 'var(--border)' }}>
         <div className="flex items-center gap-4">
           <button onClick={() => navigate('dashboard')} className="toolbar-btn"><i className="icon-arrow-left"></i></button>
           <div>
-            <div className="text-[10px] font-mono uppercase tracking-wider" style={{ color: 'var(--muted)' }}>Draft · {draft ? 'Continuing saved draft' : 'Not yet saved'}</div>
+            <div className="text-[10px] font-mono uppercase tracking-wider" style={{ color: saveStatus === 'offline' || saveStatus === 'error' ? 'var(--bear)' : 'var(--muted)' }}>Draft · {saveStatusText}</div>
             <h1 className="font-serif text-2xl font-medium">{draft ? 'Edit Thesis' : 'New Investment Thesis'}</h1>
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={saveDraft} className="btn-secondary flex-1 sm:flex-none text-sm px-4 py-2 rounded-md">Save Draft</button>
-          <button onClick={openPublish} className="btn-primary flex-1 sm:flex-none justify-center text-sm px-4 py-2 rounded-md flex items-center gap-2">
+          <button onClick={saveDraft} disabled={saveStatus === 'saving'} className="btn-secondary flex-1 sm:flex-none text-sm px-4 py-2 rounded-md">{saveStatus === 'saving' ? 'Saving…' : 'Save Draft'}</button>
+          <button onClick={openPublish} disabled={saveStatus === 'saving'} className="btn-primary flex-1 sm:flex-none justify-center text-sm px-4 py-2 rounded-md flex items-center gap-2">
             <i className="icon-lock text-xs"></i> Publish &amp; Lock
           </button>
         </div>
@@ -533,7 +723,7 @@ export default function Editor({ draft = null, navigate, showToast, onOpenPublis
         <div className="flex flex-wrap items-center gap-3 mb-6 pb-6 border-b" style={{ borderColor: 'var(--border)' }}>
           <div className="flex w-full items-center gap-2 sm:w-auto">
             <span className="text-[10px] font-mono uppercase tracking-wider" style={{ color: 'var(--muted)' }}>Security</span>
-            <SecuritySearch value={security} onSelect={setSecurity} />
+            <SecuritySearch value={security} onSelect={(selected) => { setSecurity(selected); markDirty() }} />
           </div>
           <div className="flex items-center gap-2">
             <span className="text-[10px] font-mono uppercase tracking-wider" style={{ color: 'var(--muted)' }}>Sector</span>
@@ -550,7 +740,7 @@ export default function Editor({ draft = null, navigate, showToast, onOpenPublis
           <div>
             <div className="text-[10px] font-mono uppercase tracking-wider mb-2" style={{ color: 'var(--muted)' }}>Position Declaration</div>
             <div className="flex flex-col sm:flex-row gap-2">
-              <button onClick={() => setSide('bull')} className="flex-1 py-3 px-4 border-2 rounded-md text-left transition-all" style={{ ...sideBox(side === 'bull', 'bull'), cursor: 'pointer' }}>
+              <button onClick={() => { setSide('bull'); markDirty() }} className="flex-1 py-3 px-4 border-2 rounded-md text-left transition-all" style={{ ...sideBox(side === 'bull', 'bull'), cursor: 'pointer' }}>
                 <div className="flex items-center justify-between">
                   <div>
                     <div className="font-semibold text-sm" style={{ color: bullTextColor }}>BULL / LONG</div>
@@ -559,7 +749,7 @@ export default function Editor({ draft = null, navigate, showToast, onOpenPublis
                   <i className="icon-trending-up text-lg" style={{ color: bullTextColor }}></i>
                 </div>
               </button>
-              <button onClick={() => setSide('bear')} className="flex-1 py-3 px-4 border-2 rounded-md text-left transition-all" style={{ ...sideBox(side === 'bear', 'bear'), cursor: 'pointer' }}>
+              <button onClick={() => { setSide('bear'); markDirty() }} className="flex-1 py-3 px-4 border-2 rounded-md text-left transition-all" style={{ ...sideBox(side === 'bear', 'bear'), cursor: 'pointer' }}>
                 <div className="flex items-center justify-between">
                   <div>
                     <div className="font-semibold text-sm" style={{ color: bearTextColor }}>BEAR / SHORT</div>
@@ -792,7 +982,7 @@ export default function Editor({ draft = null, navigate, showToast, onOpenPublis
         </div>
 
         <div className={tabHidden('model')}>
-          <SpreadsheetEditor initialModel={model || undefined} onChange={setModel} />
+          <SpreadsheetEditor initialModel={model || undefined} onChange={(nextModel) => { setModel(nextModel); markDirty() }} />
           {showLegacyModel && <>
           <div className="border rounded-md overflow-hidden" style={{ borderColor: 'var(--border)' }}>
             <div className="px-4 py-2.5 border-b flex items-center justify-between" style={{ borderColor: 'var(--border)', background: 'var(--bg-warm)' }}>

@@ -16,7 +16,7 @@ The main product workflow is implemented:
 2. Sign in with email/password or Google to access the private workspace.
 3. Search for a security and inspect its current price and financial statements.
 4. Write a bull or bear thesis, define invalidation triggers, and optionally attach a spreadsheet model.
-5. Save the work as a browser-local draft, schedule it privately, or publish it immediately.
+5. Let the editor autosave a private cloud draft, schedule it privately, or publish it immediately.
 6. On publication, seal the entry price and timestamp on the server.
 7. Track returns and trigger status through a 15-minute background refresh.
 8. Close immediately or seal a future close date for automatic execution.
@@ -45,7 +45,7 @@ This is still a prototype rather than a production-ready service. See [Known lim
   - Bold, italic, underline, and strikethrough formatting.
   - Headings, paragraphs, block quotes, lists, links, and dividers.
   - Slash-command menu with keyboard navigation.
-- User-scoped drafts stored in `localStorage`.
+- Debounced, owner-only cloud drafts with optimistic version checks, cross-device access, automatic import of existing browser drafts, and an offline `localStorage` safety copy.
 - Income statement, balance sheet, and cash-flow views with annual and quarterly periods.
 
 ### Integrity and lifecycle controls
@@ -157,7 +157,7 @@ SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
 LIFECYCLE_WORKER_SECRET=replace-with-a-long-random-secret
 ```
 
-`NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` are used by browser and server Supabase clients, including anonymous reads from the restricted public thesis view. `SUPABASE_SERVICE_ROLE_KEY` is used only on the server for account deletion and controlled thesis mutations. `LIFECYCLE_WORKER_SECRET` authenticates calls from Supabase Cron to the two internal worker routes and should be a cryptographically random value of at least 16 characters. Neither secret may be exposed to browser code or committed to Git.
+`NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` are used by browser and server Supabase clients, including anonymous reads from the restricted public thesis view. `SUPABASE_SERVICE_ROLE_KEY` is used only on the server for account deletion and controlled thesis, lifecycle, and draft mutations. `LIFECYCLE_WORKER_SECRET` authenticates calls from Supabase Cron to the two internal worker routes and should be a cryptographically random value of at least 16 characters. Neither secret may be exposed to browser code or committed to Git.
 
 ### 3. Configure Supabase Auth
 
@@ -183,17 +183,19 @@ Apply the committed files in `supabase/migrations` in filename order. They are i
 | --- | --- |
 | `theses` | `id`, `user_id`, `data` (`jsonb`), `status`, `created_at` |
 | `profiles` | `id`, `name`, `handle`, `avatar`, `updated_at` |
+| `drafts` | Created by `202608010003_cloud_drafts.sql`; owner, JSONB content, local identity, version, and timestamps |
 
 The resulting data contract is:
 
 - Public community reads go through server route handlers backed by the anonymous, explicit `published_theses` view; the browser does not receive the service key or opaque `data` document.
 - Signed-in users can read only their own complete thesis rows.
+- Signed-in users can read only their own drafts; draft writes go through authenticated server routes and use version checks.
 - Thesis creation and all post-publication mutations go through authenticated server routes and service-only database functions.
 - Users can insert or update only the profile whose `id` matches their Auth user ID.
 - `theses.user_id` and `profiles.id` reference `auth.users.id`.
 - Account deletion cascades from `auth.users` to associated application data.
 
-The base migration creates the tables and owner-scoped policies. The core-integrity migration then adds the version counter and indexes, immutable-field trigger, restricted public view, service-only atomic mutation functions, and final thesis privileges. The automated-lifecycle migration adds private lifecycle jobs, notifications, refresh leases, automatic publication/closing functions, and the 15-minute monitoring contract. The application has a temporary compatibility fallback for an unmigrated development database, but production should not rely on it.
+The base migration creates the tables and owner-scoped policies. The core-integrity migration then adds the version counter and indexes, immutable-field trigger, restricted public view, service-only atomic mutation functions, and final thesis privileges. The automated-lifecycle migration adds private lifecycle jobs, notifications, refresh leases, automatic publication/closing functions, and the 15-minute monitoring contract. The cloud-drafts migration adds the private versioned draft store. The application has temporary offline/compatibility fallbacks, but production should apply the full chain.
 
 If the Supabase CLI is configured for your project, migrations can be applied with:
 
@@ -202,6 +204,8 @@ supabase db push
 ```
 
 Review the migrations in a staging project and back up production data before applying them. They preserve the JSONB storage contract, but the integrity migration replaces existing policies on the app-owned `profiles` and `theses` tables and changes thesis write privileges.
+
+For an existing environment that already has the earlier migrations, run `supabase/migrations/202608010003_cloud_drafts.sql` in the Supabase dashboard’s SQL Editor (or use `supabase db push`). Until it is applied, edits remain safe in the current browser but cannot sync across devices.
 
 ### 5. Enable lifecycle scheduling
 
@@ -297,7 +301,7 @@ supabase/migrations/           Versioned database integrity migrations
 - A database trigger seals publication fields; row-locked service functions can change only lifecycle, update-log, market, and trigger-status fields.
 - Anonymous community reads use the explicit `published_theses` projection rather than the complete JSON document.
 - Public profile identity is stored in `profiles`.
-- Drafts are stored per user in browser `localStorage`.
+- Drafts are stored in owner-only `drafts` rows with a monotonically increasing version. The browser keeps an offline cache, imports legacy local drafts after a successful cloud connection, and creates a separate conflict copy when versions diverge.
 - The profile bio is also stored in browser `localStorage`.
 - Shared client datasets are cached in `DataProvider`.
 
@@ -310,6 +314,8 @@ supabase/migrations/           Versioned database integrity migrations
 | `/api/theses/[id]` | `PATCH` | Schedule a close date or close a thesis immediately. |
 | `/api/theses/[id]/updates` | `POST` | Append a server-timestamped update. |
 | `/api/theses/evaluate` | `POST` | Compatibility read endpoint; scheduled workers own durable refreshes. |
+| `/api/drafts` | `GET`, `POST` | List or create owner-only cloud drafts. |
+| `/api/drafts/[id]` | `PATCH`, `DELETE` | Version-check or delete an owner-only cloud draft. |
 | `/api/scheduled-publications` | `GET`, `POST` | List or create owner-only scheduled publications. |
 | `/api/scheduled-publications/[id]` | `PATCH`, `DELETE` | Edit, cancel, retry, or delete an unpublished scheduled record. |
 | `/api/scheduled-publications/[id]/publish-now` | `POST` | Publish a scheduled/private server draft immediately. |
@@ -367,8 +373,8 @@ Before deploying elsewhere, confirm that the host supports the Node.js runtime u
 
 ## Known limitations
 
-- The core integrity migration must be applied to each Supabase environment; committing it does not change a remote database automatically.
-- Drafts and profile bios are local to one browser and are not synchronized across devices.
+- Every migration, including the cloud-drafts migration, must be applied to each Supabase environment; committing it does not change a remote database automatically.
+- Profile bios remain local to one browser and are not synchronized across devices.
 - Dropping a Word document currently displays import progress messages but does not parse or insert the document.
 - The rich-text editor uses browser `contentEditable` and `document.execCommand`; it is not backed by Tiptap or another structured editor framework.
 - The editor's embedded-chart command inserts a placeholder block, and the Charts tab does not yet contain a chart builder.

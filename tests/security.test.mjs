@@ -7,6 +7,8 @@ import {
   isCalendarDate,
   readJsonObject,
   validateCardItems,
+  validateDraftCreatePayload,
+  validateDraftUpdatePayload,
   validateHistoryDate,
   validateLifecyclePayload,
   validateNotificationReadPayload,
@@ -100,12 +102,35 @@ test('thesis payload validation applies limits, sanitization, and unknown-field 
     triggers: [],
     model: null,
     draftId: 'local-only',
+    localDraftId: 'd-123',
+    cloudDraftId: 4,
+    cloudDraftVersion: 2,
   })
   assert.equal(clean.title, 'Durable growth')
   assert.equal(clean.ticker, 'ASML.AS')
   assert.equal(clean.body, '<p>Thesis</p>')
   assert.throws(() => validateThesisPayload({ title: 'x', ticker: 'AAPL', side: 'bull', unexpected: true }), /unsupported field/)
   assert.throws(() => validateThesisPayload({ title: 'x'.repeat(201), ticker: 'AAPL', side: 'bull' }), /200 characters/)
+})
+
+test('cloud draft validation permits incomplete work and requires optimistic versions', () => {
+  const created = validateDraftCreatePayload({
+    localId: 'd-123:offline',
+    draft: {
+      title: '',
+      ticker: '',
+      side: 'bull',
+      body: '<p onclick="bad()">Work in progress</p>',
+      triggers: [{ metric: 'Revenue', comparisons: [{ op: '>', value: null }] }],
+      model: null,
+    },
+  })
+  assert.equal(created.localId, 'd-123:offline')
+  assert.equal(created.draft.body, '<p>Work in progress</p>')
+  assert.equal(created.draft.triggers[0].comparisons[0].value, null)
+  assert.equal(validateDraftUpdatePayload({ draft: created.draft, version: 3 }).version, 3)
+  assert.throws(() => validateDraftUpdatePayload({ draft: created.draft, version: 0 }), /positive integer/)
+  assert.throws(() => validateDraftCreatePayload({ draft: created.draft, localId: '../unsafe' }), /unsupported characters/)
 })
 
 test('date and lifecycle validation rejects impossible and stale dates', () => {
@@ -320,6 +345,10 @@ test('core integrity migration seals theses and restricts public reads', async (
     new URL('../supabase/migrations/202608010002_automated_lifecycle.sql', import.meta.url),
     'utf8',
   )
+  const cloudDrafts = await readFile(
+    new URL('../supabase/migrations/202608010003_cloud_drafts.sql', import.meta.url),
+    'utf8',
+  )
   const cron = await readFile(
     new URL('../supabase/cron/setup_lifecycle.sql', import.meta.url),
     'utf8',
@@ -358,4 +387,12 @@ test('core integrity migration seals theses and restricts public reads', async (
   assert.match(cron, /theses-lifecycle-worker/)
   assert.match(cron, /theses-refresh-worker/)
   assert.match(cron, /vault\.decrypted_secrets/)
+  assert.match(cloudDrafts, /create table if not exists public\.drafts/i)
+  assert.match(cloudDrafts, /references auth\.users \(id\) on delete cascade/i)
+  assert.match(cloudDrafts, /constraint drafts_owner_local_id_unique unique \(user_id, local_id\)/i)
+  assert.match(cloudDrafts, /new\.version := old\.version \+ 1/i)
+  assert.match(cloudDrafts, /alter table public\.drafts enable row level security/i)
+  assert.match(cloudDrafts, /using \(auth\.uid\(\) = user_id\)/i)
+  assert.match(cloudDrafts, /revoke all on public\.drafts from public, anon, authenticated/i)
+  assert.match(cloudDrafts, /grant select on public\.drafts to authenticated/i)
 })
