@@ -8,6 +8,10 @@ const iconFor = (type) => {
   if (type === 'trigger_breached') return 'icon-circle-alert'
   if (type === 'trigger_warning') return 'icon-triangle-alert'
   if (type === 'trigger_clear') return 'icon-circle-check'
+  if (type === 'followed_publication') return 'icon-user-round-check'
+  if (type === 'thesis_update') return 'icon-message-square-text'
+  if (type === 'watched_close') return 'icon-lock'
+  if (type === 'watched_trigger') return 'icon-bell-ring'
   return 'icon-wrench'
 }
 
@@ -60,6 +64,8 @@ export default function Notifications({ navigate }) {
         navigate('thesis', thesis)
         return
       }
+      navigate('thesis', { id: notification.thesisId })
+      return
     }
     if (notification.lifecycleJobId) navigate('drafts')
   }
@@ -92,7 +98,7 @@ export default function Notifications({ navigate }) {
           <div>
             <div className="text-[10px] font-mono uppercase tracking-wider mb-1" style={{ color: 'var(--muted)' }}>Workspace</div>
             <h1 className="font-serif text-3xl font-medium tracking-tight">Notifications</h1>
-            <p className="text-sm mt-1" style={{ color: 'var(--ink-soft)' }}>Lifecycle events and financial-trigger transitions.</p>
+            <p className="text-sm mt-1" style={{ color: 'var(--ink-soft)' }}>Lifecycle events, followed analysts, and watched-thesis activity.</p>
           </div>
           <button type="button" disabled={!unread || busy} onClick={markAll} className="btn-secondary text-xs px-3 py-2 rounded-md" style={{ opacity: unread ? 1 : 0.5 }}>
             {busy ? 'Marking…' : 'Mark all read'}

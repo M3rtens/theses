@@ -40,7 +40,7 @@ function rangeFrom(range, entryDate) {
 export default function ThesisDetail({ navigate, thesis }) {
   // Refresh the app-wide cache after lifecycle mutations so the counts and
   // statuses on other views (My Theses, Triggers, Leaderboard) stay in step.
-  const { refresh } = useData()
+  const { refresh, social, setSocialRelationship } = useData()
   const user = useUser()
   // The thesis to show comes from navigation. Guard against a direct load with no
   // selection so the hooks below still run against a defined object.
@@ -48,6 +48,26 @@ export default function ThesisDetail({ navigate, thesis }) {
   // Community-feed records carry their joined profile name. Owner-scoped records
   // do not, so fall back to the signed-in profile instead of presentation copy.
   const authorName = base.author || user?.name || 'Analyst'
+  const [bookmarkBusy, setBookmarkBusy] = useState(false)
+  const [bookmarkError, setBookmarkError] = useState('')
+  const isBookmarked = social.bookmarks.some((item) => Number(item.id) === Number(base.id))
+
+  const toggleBookmark = async () => {
+    if (!user) {
+      navigate('saved')
+      return
+    }
+    if (!base.id || bookmarkBusy) return
+    setBookmarkBusy(true)
+    setBookmarkError('')
+    try {
+      await setSocialRelationship('bookmark', base.id, !isBookmarked)
+    } catch (error) {
+      setBookmarkError(error.message)
+    } finally {
+      setBookmarkBusy(false)
+    }
+  }
 
   // Use the exact listing sealed at publication. Falling back to the display
   // ticker can silently switch a foreign security to an ADR or another venue,
@@ -286,6 +306,12 @@ export default function ThesisDetail({ navigate, thesis }) {
             <span className="font-mono">{base.ticker}</span>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            {base.id && (
+              <button type="button" disabled={bookmarkBusy} onClick={toggleBookmark} aria-pressed={isBookmarked} className="btn-secondary text-xs px-3 py-2 rounded-md inline-flex items-center gap-1.5">
+                <i className={`${isBookmarked ? 'icon-bookmark-check' : 'icon-bookmark'} text-xs`}></i>
+                {bookmarkBusy ? 'Saving…' : isBookmarked ? 'Saved' : user ? 'Save' : 'Sign in to save'}
+              </button>
+            )}
             {base.id && <ShareControls path={`/theses/${base.id}`} title={`${base.ticker}: ${base.title}`} text={`Read ${authorName}'s investment thesis on ${base.ticker}.`} />}
             {isClosed
               ? <span className="text-[10px] font-mono uppercase tracking-wider px-2 py-1 rounded" style={{ background: 'var(--bg-warm)', color: 'var(--ink-soft)' }}>Closed{closedInfo?.closedAt ? ` ${fmtStamp(closedInfo.closedAt)}` : ''}</span>
@@ -294,6 +320,7 @@ export default function ThesisDetail({ navigate, thesis }) {
                 : null}
             <div className="seal"><i className="icon-fingerprint text-[11px]"></i> Locked {base.publishDate}</div>
           </div>
+          {bookmarkError && <p className="text-[11px] mt-2" style={{ color: 'var(--bear)' }}>{bookmarkError}</p>}
         </div>
 
         <div className="flex flex-col items-start gap-5 lg:flex-row lg:justify-between lg:gap-8">

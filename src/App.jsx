@@ -20,9 +20,10 @@ import Triggers from './views/Triggers.jsx'
 import Discover from './views/Discover.jsx'
 import Notifications from './views/Notifications.jsx'
 import AnalystProfile from './views/AnalystProfile.jsx'
+import Saved from './views/Saved.jsx'
 import { fmtPrice } from './lib/format.js'
 
-const PROTECTED_VIEWS = new Set(['dashboard', 'editor', 'profile', 'mytheses', 'drafts', 'triggers', 'notifications'])
+const PROTECTED_VIEWS = new Set(['dashboard', 'editor', 'profile', 'mytheses', 'drafts', 'triggers', 'notifications', 'saved'])
 
 export default function App({ initialView = null, initialThesis = null, initialAnalyst = null }) {
   const user = useUser()
@@ -202,6 +203,7 @@ export default function App({ initialView = null, initialThesis = null, initialA
       case 'drafts': return <Drafts navigate={navigate} />
       case 'triggers': return <Triggers navigate={navigate} />
       case 'notifications': return <Notifications navigate={navigate} />
+      case 'saved': return <Saved navigate={navigate} />
       case 'discover': return <Discover navigate={navigate} />
       default: return <Dashboard navigate={navigate} />
     }

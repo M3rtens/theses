@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import ShareControls from '../components/ShareControls.jsx'
 import ThesisCard from '../components/ThesisCard.jsx'
+import { useData } from '../components/DataProvider.jsx'
 import { useUser } from '../components/UserProvider.jsx'
 
 const FILTERS = ['all', 'active', 'closed']
@@ -17,7 +18,11 @@ const signed = (value) => `${Number(value) >= 0 ? '+' : '−'}${Math.abs(Number(
 
 export default function AnalystProfile({ analyst, navigate }) {
   const user = useUser()
+  const { social, loading, setSocialRelationship } = useData()
   const [filter, setFilter] = useState('all')
+  const [followBusy, setFollowBusy] = useState(false)
+  const [followError, setFollowError] = useState('')
+  const [followerCount, setFollowerCount] = useState(Number(analyst?.followerCount) || 0)
   const theses = analyst?.theses || []
   const stats = analyst?.stats || {}
   const visible = theses.filter((thesis) => filter === 'all' || (filter === 'closed' ? thesis.status === 'closed' : thesis.status !== 'closed'))
@@ -29,6 +34,25 @@ export default function AnalystProfile({ analyst, navigate }) {
   })
   const sectors = [...sectorCounts.entries()].sort((a, b) => b[1] - a[1])
   const maximumSector = sectors.reduce((maximum, [, count]) => Math.max(maximum, count), 0)
+  const isFollowing = social.following.some((item) => item.userId === analyst?.userId)
+
+  const toggleFollow = async () => {
+    if (!user) {
+      navigate('saved')
+      return
+    }
+    if (followBusy || loading.social) return
+    setFollowBusy(true)
+    setFollowError('')
+    try {
+      await setSocialRelationship('follow', analyst.userId, !isFollowing)
+      setFollowerCount((count) => Math.max(0, count + (isFollowing ? -1 : 1)))
+    } catch (error) {
+      setFollowError(error.message)
+    } finally {
+      setFollowBusy(false)
+    }
+  }
 
   if (!analyst) return null
 
@@ -45,6 +69,7 @@ export default function AnalystProfile({ analyst, navigate }) {
             <div className="text-sm font-mono" style={{ color: 'var(--muted)' }}>
               {[analyst.handle, formatJoined(analyst.joinedAt), analyst.location].filter(Boolean).join(' · ')}
             </div>
+            <div className="text-xs font-mono mt-1" style={{ color: 'var(--muted)' }}>{followerCount} follower{followerCount === 1 ? '' : 's'}</div>
             <p className="text-sm mt-2 max-w-2xl" style={{ color: analyst.bio ? 'var(--ink-soft)' : 'var(--muted)' }}>
               {analyst.bio || 'This analyst has not added a public bio yet.'}
             </p>
@@ -52,10 +77,18 @@ export default function AnalystProfile({ analyst, navigate }) {
               <ShareControls path={`/analysts/${analyst.slug}`} title={`${analyst.name} on Theses`} text="View this analyst’s published investment record." />
             </div>
           </div>
-          {user?.id === analyst.userId && (
+          {user?.id === analyst.userId ? (
             <button type="button" onClick={() => navigate('profile')} className="btn-secondary text-xs px-3 py-2 rounded-md inline-flex items-center gap-1.5">
               <i className="icon-pencil text-xs"></i> Edit your profile
             </button>
+          ) : (
+            <div>
+              <button type="button" disabled={followBusy || loading.social} onClick={toggleFollow} aria-pressed={isFollowing} className={`${isFollowing ? 'btn-secondary' : 'btn-primary'} text-xs px-4 py-2 rounded-md inline-flex items-center gap-1.5`}>
+                <i className={`${isFollowing ? 'icon-user-check' : 'icon-user-plus'} text-xs`}></i>
+                {loading.social ? 'Loading…' : followBusy ? 'Saving…' : isFollowing ? 'Following' : user ? 'Follow' : 'Sign in to follow'}
+              </button>
+              {followError && <p className="text-[11px] mt-2" style={{ color: 'var(--bear)' }}>{followError}</p>}
+            </div>
           )}
         </div>
 

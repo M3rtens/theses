@@ -2,7 +2,7 @@ import AppShell from '../src/components/AppShell.jsx'
 
 const ROOT_VIEWS = new Set([
   'dashboard', 'editor', 'profile', 'mytheses', 'drafts', 'triggers',
-  'notifications', 'leaderboard', 'discover',
+  'notifications', 'saved', 'leaderboard', 'discover',
 ])
 
 export default async function Page({ searchParams }) {

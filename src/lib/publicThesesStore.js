@@ -122,3 +122,20 @@ export async function listPublicThesesByOwner(ownerId) {
   if (!missingProjection(projected.error)) throw projected.error
   return (await listPublicTheses()).filter((thesis) => thesis.ownerId === ownerId)
 }
+
+export async function listPublicThesesByIds(values) {
+  const ids = [...new Set((values || []).map(normalizePublicThesisId).filter(Boolean))]
+  if (!ids.length) return []
+
+  const publicClient = createPublicClient()
+  const projected = await publicClient
+    .from('published_theses')
+    .select('*')
+    .in('id', ids)
+    .order('created_at', { ascending: false })
+    .order('id', { ascending: false })
+  if (!projected.error) return (projected.data || []).map(hydrateProjectedThesis)
+  if (!missingProjection(projected.error)) throw projected.error
+  const wanted = new Set(ids)
+  return (await listPublicTheses()).filter((thesis) => wanted.has(Number(thesis.id)))
+}

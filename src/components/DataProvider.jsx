@@ -98,6 +98,7 @@ export default function DataProvider({ children }) {
   const [drafts, setDrafts] = useState([])
   const [scheduled, setScheduled] = useState([])
   const [notifications, setNotifications] = useState([])
+  const [social, setSocial] = useState({ following: [], bookmarks: [] })
   const [live, setLive] = useState({})
   const [loading, setLoading] = useState({
     stored: true,
@@ -106,6 +107,7 @@ export default function DataProvider({ children }) {
     drafts: true,
     scheduled: true,
     notifications: true,
+    social: true,
   })
 
   // Latest stored theses, so the polling interval can fetch quotes for the
@@ -358,6 +360,37 @@ export default function DataProvider({ children }) {
     }
   }, [userId])
 
+  const loadSocial = useCallback(async () => {
+    if (!userId) {
+      setSocial({ following: [], bookmarks: [] })
+      setLoading((current) => ({ ...current, social: false }))
+      return { following: [], bookmarks: [] }
+    }
+    try {
+      const response = await fetch('/api/social')
+      const data = response.ok ? await response.json() : null
+      if (Array.isArray(data?.following) && Array.isArray(data?.bookmarks)) {
+        setSocial(data)
+        return data
+      }
+    } catch {
+      /* social migration unavailable — keep last-known */
+    } finally {
+      setLoading((current) => ({ ...current, social: false }))
+    }
+    return { following: [], bookmarks: [] }
+  }, [userId])
+
+  const setSocialRelationship = useCallback(async (kind, targetId, enabled) => {
+    const response = await fetch('/api/social', {
+      method: enabled ? 'POST' : 'DELETE',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ kind, targetId }),
+    })
+    await readResponse(response)
+    return loadSocial()
+  }, [loadSocial])
+
   // Fetch live prices for the current stored ticker set. Read from the ref so a
   // single stable callback always sees the latest theses.
   const refreshLive = useCallback(async () => {
@@ -390,7 +423,8 @@ export default function DataProvider({ children }) {
     loadDrafts()
     loadScheduled()
     loadNotifications()
-  }, [loadStored, loadLeaderboard, loadDiscover, loadDrafts, loadScheduled, loadNotifications])
+    loadSocial()
+  }, [loadStored, loadLeaderboard, loadDiscover, loadDrafts, loadScheduled, loadNotifications, loadSocial])
 
   // Initial load: fire all reads in parallel once on mount.
   useEffect(() => {
@@ -400,7 +434,8 @@ export default function DataProvider({ children }) {
     loadDrafts()
     loadScheduled()
     loadNotifications()
-  }, [loadStored, loadLeaderboard, loadDiscover, loadDrafts, loadScheduled, loadNotifications])
+    loadSocial()
+  }, [loadStored, loadLeaderboard, loadDiscover, loadDrafts, loadScheduled, loadNotifications, loadSocial])
 
   useEffect(() => {
     if (!userId) return undefined
@@ -436,6 +471,7 @@ export default function DataProvider({ children }) {
     drafts,
     scheduled,
     notifications,
+    social,
     live,
     loading,
     refresh,
@@ -444,6 +480,8 @@ export default function DataProvider({ children }) {
     loadDrafts,
     loadScheduled,
     loadNotifications,
+    loadSocial,
+    setSocialRelationship,
   }
 
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>

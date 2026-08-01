@@ -14,6 +14,7 @@ import {
   validateNotificationReadPayload,
   validateProfilePayload,
   validateScheduledPublicationPayload,
+  validateSocialMutationPayload,
   validateThesisPayload,
   validateUpdatePayload,
 } from '../src/lib/apiValidation.js'
@@ -305,6 +306,23 @@ test('scheduled publication and notification requests validate durable inputs', 
   })
   assert.deepEqual(validateNotificationReadPayload({ all: true }), { all: true, ids: [] })
   assert.throws(() => validateNotificationReadPayload({ ids: [0] }), /positive integers/)
+})
+
+test('social mutations accept only supported relationship targets', () => {
+  assert.deepEqual(validateSocialMutationPayload({
+    kind: 'follow',
+    targetId: '550e8400-e29b-41d4-a716-446655440000',
+  }), {
+    kind: 'follow',
+    targetId: '550e8400-e29b-41d4-a716-446655440000',
+  })
+  assert.deepEqual(validateSocialMutationPayload({ kind: 'bookmark', targetId: 42 }), {
+    kind: 'bookmark',
+    targetId: 42,
+  })
+  assert.throws(() => validateSocialMutationPayload({ kind: 'follow', targetId: 'not-a-user' }), /valid analyst id/)
+  assert.throws(() => validateSocialMutationPayload({ kind: 'bookmark', targetId: -1 }), /positive thesis id/)
+  assert.throws(() => validateSocialMutationPayload({ kind: 'like', targetId: 1 }), /follow or bookmark/)
 })
 
 test('exchange-local scheduling requires a fresh regular-session snapshot', () => {
@@ -605,6 +623,10 @@ test('core integrity migration seals theses and restricts public reads', async (
     new URL('../supabase/migrations/202608010005_public_routes.sql', import.meta.url),
     'utf8',
   )
+  const socialGraph = await readFile(
+    new URL('../supabase/migrations/202608020001_social_graph.sql', import.meta.url),
+    'utf8',
+  )
   const cron = await readFile(
     new URL('../supabase/cron/setup_lifecycle.sql', import.meta.url),
     'utf8',
@@ -668,4 +690,15 @@ test('core integrity migration seals theses and restricts public reads', async (
   assert.match(publicRoutes, /p\.slug as author_slug/i)
   assert.match(publicRoutes, /grant select on public\.published_theses to anon, authenticated, service_role/i)
   assert.match(publicRoutes, /revoke all on function public\.build_profile_slug/i)
+  assert.match(socialGraph, /create table if not exists public\.analyst_follows/i)
+  assert.match(socialGraph, /create table if not exists public\.thesis_bookmarks/i)
+  assert.match(socialGraph, /constraint analyst_follows_no_self/i)
+  assert.match(socialGraph, /bookmarks_require_published_thesis/i)
+  assert.match(socialGraph, /alter table public\.analyst_follows enable row level security/i)
+  assert.match(socialGraph, /using \(auth\.uid\(\) = follower_id\)/i)
+  assert.match(socialGraph, /using \(auth\.uid\(\) = user_id\)/i)
+  assert.match(socialGraph, /create trigger notify_new_public_thesis/i)
+  assert.match(socialGraph, /create trigger notify_social_thesis_change/i)
+  assert.match(socialGraph, /create trigger notify_social_trigger_transition/i)
+  assert.match(socialGraph, /on conflict \(event_key\) do nothing/i)
 })

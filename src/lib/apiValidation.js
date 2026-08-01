@@ -22,6 +22,7 @@ export const REQUEST_LIMITS = {
   lifecycle: 4_000,
   cards: 64_000,
   notifications: 8_000,
+  social: 4_000,
 }
 
 export class RequestValidationError extends Error {
@@ -474,6 +475,25 @@ export function validateNotificationReadPayload(body) {
     return id
   }))]
   return { all: false, ids }
+}
+
+export function validateSocialMutationPayload(body) {
+  if (!isPlainObject(body)) fail('social request must be an object')
+  assertAllowedKeys(body, new Set(['kind', 'targetId']), 'social request')
+  const kind = String(body.kind || '')
+  if (kind === 'follow') {
+    const targetId = String(body.targetId || '').toLowerCase()
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(targetId)) {
+      fail('targetId must be a valid analyst id')
+    }
+    return { kind, targetId }
+  }
+  if (kind === 'bookmark') {
+    const targetId = Number(body.targetId)
+    if (!Number.isSafeInteger(targetId) || targetId <= 0) fail('targetId must be a positive thesis id')
+    return { kind, targetId }
+  }
+  fail('kind must be follow or bookmark')
 }
 
 export function validateCardItems(body) {

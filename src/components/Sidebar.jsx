@@ -9,6 +9,7 @@ const NAV_MAIN = [
   { view: 'mytheses', icon: 'icon-file-text', label: 'My Theses' },
   { view: 'drafts', icon: 'icon-file-pen', label: 'Drafts' },
   { view: 'notifications', icon: 'icon-inbox', label: 'Notifications' },
+  { view: 'saved', icon: 'icon-bookmark', label: 'Saved' },
 ]
 
 const NAV_COMMUNITY = [
@@ -20,7 +21,7 @@ const NAV_COMMUNITY = [
 export default function Sidebar({ view, navigate }) {
   const navClass = (target) => `nav-item ${view === target ? 'active' : ''} cursor-pointer flex items-center gap-2.5 py-1`
   const user = useUser()
-  const { stored, drafts, scheduled, notifications } = useData()
+  const { stored, drafts, scheduled, notifications, social } = useData()
   const router = useRouter()
   const [mobileOpen, setMobileOpen] = useState(false)
 
@@ -53,6 +54,7 @@ export default function Sidebar({ view, navigate }) {
     mytheses: allTheses.length,
     drafts: drafts.length + scheduled.length,
     notifications: unreadCount,
+    saved: (social.following?.length || 0) + (social.bookmarks?.length || 0),
   }
   const alertCount = useMemo(() => allTheses.reduce((count, thesis) => (
     thesis.status === 'closed'

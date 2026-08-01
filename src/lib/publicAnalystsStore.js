@@ -18,6 +18,10 @@ export async function getPublicAnalystBySlug(value) {
   if (error) throw error
   if (!profile) return null
 
+  const countResult = await admin
+    .from('analyst_follows')
+    .select('*', { count: 'exact', head: true })
+    .eq('followed_id', profile.id)
   const theses = await listPublicThesesByOwner(profile.id)
   return {
     userId: profile.id,
@@ -29,6 +33,7 @@ export async function getPublicAnalystBySlug(value) {
     joinedAt: profile.joined_at || null,
     verified: profile.verified === true,
     slug: profile.slug,
+    followerCount: countResult.error ? 0 : (countResult.count || 0),
     theses,
     stats: selfStats(theses, makeRetOf(null)),
   }

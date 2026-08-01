@@ -103,6 +103,9 @@ This is still a prototype rather than a production-ready service. See [Known lim
 - Thesis-specific and analyst-specific Open Graph images, metadata, canonical links, native sharing, and copy-link controls.
 - Public profile identity and stable analyst slug joined from the `profiles` table.
 - Owner-only lifecycle notifications with unread counts and retry actions for failed automation.
+- Follow/unfollow controls on public analyst profiles and a private followed-analyst list.
+- Private thesis bookmarks collected in the Saved workspace.
+- Deduplicated in-app alerts for new theses, timestamped updates, closures, and trigger transitions from followed or bookmarked records.
 - Least-privilege `published_theses` view that exposes an explicit public field projection instead of the underlying thesis JSON document.
 
 ### Spreadsheet modeler
@@ -204,19 +207,22 @@ Apply the committed files in `supabase/migrations` in filename order. They are i
 | `theses` | `id`, `user_id`, `data` (`jsonb`), `status`, `created_at` |
 | `profiles` | `id`, identity fields, `bio`, `location`, `joined_at`, `verified`, stable `slug`, `updated_at` |
 | `drafts` | Created by `202608010003_cloud_drafts.sql`; owner, JSONB content, local identity, version, and timestamps |
+| `analyst_follows` | Created by `202608020001_social_graph.sql`; follower, followed analyst, and timestamp |
+| `thesis_bookmarks` | Created by `202608020001_social_graph.sql`; owner, published thesis, and timestamp |
 
 The resulting data contract is:
 
 - Public community reads go through server route handlers backed by the anonymous, explicit `published_theses` view; the browser does not receive the service key or opaque `data` document.
 - Signed-in users can read only their own complete thesis rows.
 - Signed-in users can read only their own drafts; draft writes go through authenticated server routes and use version checks.
+- Signed-in users can manage only their own follows and bookmarks; relationship identities are protected by row-level security.
 - Thesis creation and all post-publication mutations go through authenticated server routes and service-only database functions.
 - Users can insert or update only the profile whose `id` matches their Auth user ID.
 - Profile join dates are sourced from `auth.users.created_at`; owners cannot rewrite them or self-assign verification.
 - `theses.user_id` and `profiles.id` reference `auth.users.id`.
 - Account deletion cascades from `auth.users` to associated application data.
 
-The base migration creates the tables and owner-scoped policies. The core-integrity migration then adds the version counter and indexes, immutable-field trigger, restricted public view, service-only atomic mutation functions, and final thesis privileges. The automated-lifecycle migration adds private lifecycle jobs, notifications, refresh leases, automatic publication/closing functions, and the 15-minute monitoring contract. The final migrations add versioned cloud drafts, durable profile details, stable analyst slugs, and canonical public-route support. The application has temporary offline/compatibility fallbacks, but production should apply the full chain.
+The base migration creates the tables and owner-scoped policies. The core-integrity migration then adds the version counter and indexes, immutable-field trigger, restricted public view, service-only atomic mutation functions, and final thesis privileges. The automated-lifecycle migration adds private lifecycle jobs, notifications, refresh leases, automatic publication/closing functions, and the 15-minute monitoring contract. Later migrations add versioned cloud drafts, durable profile details, stable analyst slugs, canonical public-route support, and the owner-only social graph with notification fan-out. The application has temporary offline/compatibility fallbacks, but production should apply the full chain.
 
 If the Supabase CLI is configured for your project, migrations can be applied with:
 
@@ -226,7 +232,7 @@ supabase db push
 
 Review the migrations in a staging project and back up production data before applying them. They preserve the JSONB storage contract, but the integrity migration replaces existing policies on the app-owned `profiles` and `theses` tables and changes thesis write privileges.
 
-For an existing environment that already has the lifecycle migration, run migrations `202608010003` through `202608010005` in filename order in the Supabase dashboard’s SQL Editor (or use `supabase db push`). Until they are applied, draft/profile edits remain safe in the current browser, while analyst URLs require the public-routes migration.
+For an existing environment that already has migrations through `202608010005`, run `202608020001_social_graph.sql` in the Supabase dashboard’s SQL Editor (or use `supabase db push`) before deploying the social UI. This creates the relationship tables, RLS policies, and notification triggers; it does not modify or delete existing theses.
 
 ### 5. Enable lifecycle scheduling
 
@@ -345,6 +351,7 @@ supabase/migrations/           Versioned database integrity migrations
 | `/api/scheduled-publications/[id]` | `PATCH`, `DELETE` | Edit, cancel, retry, or delete an unpublished scheduled record. |
 | `/api/scheduled-publications/[id]/publish-now` | `POST` | Publish a scheduled/private server draft immediately. |
 | `/api/notifications` | `GET`, `PATCH` | List owner notifications or mark them read. |
+| `/api/social` | `GET`, `POST`, `DELETE` | List or mutate the signed-in user's analyst follows and thesis bookmarks. |
 | `/api/lifecycle-jobs/[id]/retry` | `POST` | Retry an action-required publication or close job. |
 | `/api/internal/lifecycle` | `POST` | Authenticated Cron worker for scheduled publication and closing. |
 | `/api/internal/refresh` | `POST` | Authenticated Cron worker for 15-minute return and trigger refreshes. |
@@ -400,7 +407,7 @@ Before deploying elsewhere, confirm that the host supports the Node.js runtime u
 
 ## Known limitations
 
-- Every migration, including cloud drafts, cloud profiles, and public routes, must be applied to each Supabase environment; committing them does not change a remote database automatically.
+- Every migration, including cloud drafts, cloud profiles, public routes, and the social graph, must be applied to each Supabase environment; committing them does not change a remote database automatically.
 - DOCX import preserves text structure and basic formatting; embedded images, tables, comments, and complex Word layouts are simplified or omitted.
 - Lifecycle automation depends on the separately configured Supabase Cron jobs; applying the migration alone does not start the workers.
 - Notifications are in-app only and are polled once per minute; email and push delivery are not implemented.
