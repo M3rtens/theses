@@ -7,7 +7,7 @@ import { useUser } from '../components/UserProvider.jsx'
 import { DEFAULT_PROFILE, loadProfile, markProfileSynced, saveProfile } from '../lib/profile.js'
 import { makeRetOf, selfStats } from '../lib/stats.js'
 import { createClient } from '../lib/supabase/client'
-import { useLeaderboard } from '../lib/useLeaderboard.js'
+import { useLeaderboardMeta } from '../lib/useLeaderboard.js'
 import { useLiveTheses } from '../lib/useLiveTheses.js'
 import { useStoredTheses } from '../lib/useStoredTheses.js'
 
@@ -38,9 +38,9 @@ export default function Profile({ navigate }) {
 
   // Own stat tiles are computed live from this user's theses; rank and the total
   // analyst count come from the database-wide leaderboard.
-  const board = useLeaderboard()
+  const leaderboardMeta = useLeaderboardMeta()
   const stats = useMemo(() => selfStats(published, makeRetOf(live)), [published, live])
-  const myRow = board.find((r) => r.isYou)
+  const myRow = leaderboardMeta.viewer
   const myRank = myRow?.rank ?? null
   const me = { ...stats, name: user?.name || 'You', handle: user?.handle || '', avatar: user?.avatar || '—' }
   const signed = (n) => `${n >= 0 ? '+' : '−'}${Math.abs(n).toFixed(1)}%`
@@ -248,7 +248,7 @@ export default function Profile({ navigate }) {
           <div className="w-full sm:w-auto sm:text-right shrink-0">
             <div className="text-[10px] font-mono uppercase tracking-wider" style={{ color: 'var(--muted)' }}>Global Rank</div>
             <div className="font-serif text-4xl font-medium">{myRank ? `#${myRank}` : '—'}</div>
-            <div className="text-xs font-mono" style={{ color: 'var(--ink-soft)' }}>of {board.length} analyst{board.length === 1 ? '' : 's'}</div>
+            <div className="text-xs font-mono" style={{ color: 'var(--ink-soft)' }}>of {leaderboardMeta.pagination.totalItems} analyst{leaderboardMeta.pagination.totalItems === 1 ? '' : 's'}</div>
             {editing === null && (
               <div className="mt-3 flex flex-row flex-wrap sm:flex-col sm:items-end gap-2">
                 {profile.slug && <ShareControls path={`/analysts/${profile.slug}`} title={`${me.name} on Theses`} text="View my published investment record." />}

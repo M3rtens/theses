@@ -6,3 +6,7 @@ import { useData } from '../components/DataProvider.jsx'
 export function useDiscoverFeed() {
   return useData().discover
 }
+
+export function useDiscoverMeta() {
+  return useData().discoverMeta
+}

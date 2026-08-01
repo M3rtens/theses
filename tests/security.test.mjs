@@ -22,6 +22,12 @@ import { normalizePublicUrl } from '../src/lib/urls.js'
 import { createAsyncCache } from '../src/lib/asyncCache.js'
 import { hydrateProjectedThesis } from '../src/lib/publicTheses.js'
 import {
+  buildDiscoverPage,
+  buildLeaderboardPage,
+  parseDiscoverQuery,
+  parseLeaderboardQuery,
+} from '../src/lib/community.js'
+import {
   calendarDateInTimezone,
   marketSnapshotEligibility,
   verifyWorkerAuthorization,
@@ -345,6 +351,62 @@ test('public thesis projection maps only explicit fields and sanitizes HTML', ()
   assert.equal(projected.body, '<p>Visible</p>')
   assert.equal(projected.authorSlug, 'analyst-550e8400e29b41d4a716446655440000')
   assert.equal(Object.hasOwn(projected, 'private_note'), false)
+})
+
+test('community query validation bounds pages and accepts supported filters', () => {
+  assert.deepEqual(parseDiscoverQuery(new URLSearchParams('page=2&pageSize=10&sort=top&q=growth&sector=Software')), {
+    page: 2,
+    pageSize: 10,
+    query: 'growth',
+    sector: 'Software',
+    sort: 'top',
+  })
+  assert.deepEqual(parseLeaderboardQuery(new URLSearchParams('side=bear&period=90plus&sector=Energy')), {
+    page: 1,
+    pageSize: 25,
+    side: 'bear',
+    period: '90plus',
+    sector: 'Energy',
+  })
+  assert.throws(() => parseDiscoverQuery(new URLSearchParams('pageSize=51')), /between 1 and 50/)
+  assert.throws(() => parseLeaderboardQuery(new URLSearchParams('side=neutral')), /unsupported side/)
+})
+
+test('community pagination and leaderboard filters use complete thesis portfolios', () => {
+  const theses = [
+    { id: 1, ownerId: 'a', author: 'Alpha', ticker: 'AAA', title: 'Older growth', side: 'bull', sector: 'Software', daysActive: 10, ret: 20, status: 'active', updates: 0, createdAt: '2026-06-01T00:00:00Z' },
+    { id: 2, ownerId: 'a', author: 'Alpha', ticker: 'AAB', title: 'Energy short', side: 'bear', sector: 'Energy', daysActive: 100, ret: -5, status: 'closed', closeReturn: -5, updates: 3, createdAt: '2026-07-01T00:00:00Z' },
+    { id: 3, ownerId: 'b', author: 'Beta', ticker: 'BBB', title: 'Energy growth', side: 'bull', sector: 'Energy', daysActive: 50, ret: 8, status: 'active', updates: 1, createdAt: '2026-08-01T00:00:00Z' },
+  ]
+
+  const discover = buildDiscoverPage(theses, {
+    page: 2, pageSize: 1, query: 'growth', sector: 'all', sort: 'newest',
+  }, Date.parse('2026-08-02T00:00:00Z'))
+  assert.equal(discover.pagination.totalItems, 2)
+  assert.equal(discover.items[0].id, 1)
+  assert.deepEqual(discover.facets.sectors, ['Energy', 'Software'])
+
+  const shortBoard = buildLeaderboardPage(theses, {
+    page: 1, pageSize: 25, side: 'bear', period: 'all', sector: 'all',
+  }, 'a')
+  assert.equal(shortBoard.pagination.totalItems, 1)
+  assert.equal(shortBoard.items[0].userId, 'a')
+  assert.equal(shortBoard.items[0].theses, 1)
+  assert.match(shortBoard.items[0].best, /Short/)
+
+  const energyBoard = buildLeaderboardPage(theses, {
+    page: 2, pageSize: 1, side: 'all', period: 'all', sector: 'Energy',
+  }, 'b')
+  assert.equal(energyBoard.pagination.totalItems, 2)
+  assert.equal(energyBoard.items[0].userId, 'a')
+  assert.equal(energyBoard.items[0].rank, 2)
+  assert.equal(energyBoard.viewer.userId, 'b')
+  assert.equal(energyBoard.viewer.rank, 1)
+
+  const longHold = buildLeaderboardPage(theses, {
+    page: 1, pageSize: 25, side: 'all', period: '90plus', sector: 'all',
+  })
+  assert.deepEqual(longHold.items.map((row) => row.userId), ['a'])
 })
 
 test('core integrity migration seals theses and restricts public reads', async () => {

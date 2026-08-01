@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { makeRetOf } from '../../../src/lib/stats.js'
+import { buildDiscoverPage, parseDiscoverQuery } from '../../../src/lib/community.js'
 import { listPublicTheses } from '../../../src/lib/publicThesesStore.js'
 
 export const runtime = 'nodejs'
@@ -20,9 +20,16 @@ function snippetFrom(html) {
   return text.slice(0, 180).replace(/\s+\S*$/, '') + '…'
 }
 
-// GET /api/discover -> a deliberately public, read-only projection of every
-// published thesis, joined to its author's public profile. Newest first.
-export async function GET() {
+// GET /api/discover -> a filtered, sorted page from the deliberately public,
+// read-only projection of published theses and author profiles.
+export async function GET(request) {
+  let options
+  try {
+    options = parseDiscoverQuery(new URL(request.url).searchParams)
+  } catch (error) {
+    return NextResponse.json({ error: error.message }, { status: 400 })
+  }
+
   let theses
   try {
     theses = await listPublicTheses()
@@ -31,16 +38,6 @@ export async function GET() {
     return NextResponse.json({ error: 'community feed unavailable' }, { status: 500 })
   }
 
-  // Stored returns: closed theses use their sealed close return; active ones use
-  // the latest return persisted by the scheduled refresh worker.
-  const retOf = makeRetOf(null)
-
-  const feed = theses.map((thesis) => ({
-    ...thesis,
-    ret: retOf(thesis),
-    date: thesis.publishDate,
-    snippet: snippetFrom(thesis.body),
-  }))
-
-  return NextResponse.json(feed)
+  const feed = theses.map((thesis) => ({ ...thesis, snippet: snippetFrom(thesis.body) }))
+  return NextResponse.json(buildDiscoverPage(feed, options))
 }

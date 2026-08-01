@@ -1,13 +1,14 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { useLeaderboard } from '../lib/useLeaderboard.js'
+import { useData } from '../components/DataProvider.jsx'
+import { SECTORS } from '../lib/sectors.js'
 
+const PAGE_SIZE = 25
 const SIDE_FILTERS = [
   { value: 'all', label: 'All' },
   { value: 'bull', label: 'Long only' },
   { value: 'bear', label: 'Short only' },
 ]
-
 const PERIOD_FILTERS = [
   { value: 'all', label: 'All Periods' },
   { value: 'lt30', label: '< 30d' },
@@ -15,37 +16,71 @@ const PERIOD_FILTERS = [
   { value: '90plus', label: '90d+' },
 ]
 
-const SECTOR_FILTERS = ['All Sectors', 'Tech', 'Energy', 'Financials', 'Healthcare', 'Consumer']
-
-const SECTOR_BY_TICKER = {
-  NVDA: 'Tech', MRNA: 'Healthcare', TSLA: 'Consumer', LLY: 'Healthcare', XOM: 'Energy',
-  AMD: 'Tech', V: 'Financials', SHOP: 'Tech', OXY: 'Energy', META: 'Tech',
-  COST: 'Consumer', UBER: 'Tech', ENPH: 'Energy', JPM: 'Financials',
-}
-
 export default function Leaderboard() {
-  const [sideFilter, setSideFilter] = useState('all')
-  const [periodFilter, setPeriodFilter] = useState('all')
-  const [sectorFilter, setSectorFilter] = useState('All Sectors')
+  const { leaderboard: cachedBoard, leaderboardMeta: cachedMeta, loading: appLoading } = useData()
+  const [side, setSide] = useState('all')
+  const [period, setPeriod] = useState('all')
+  const [sector, setSector] = useState('all')
+  const [page, setPage] = useState(1)
+  const [board, setBoard] = useState([])
+  const [pagination, setPagination] = useState({ page: 1, pageSize: PAGE_SIZE, totalItems: 0, totalPages: 1 })
+  const [availableSectors, setAvailableSectors] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
 
-  // Ranked analysts computed from the database (all users' stored theses).
-  const board = useLeaderboard()
+  useEffect(() => {
+    const isDefaultPage = side === 'all' && period === 'all' && sector === 'all' && page === 1
+    if (isDefaultPage) {
+      setBoard(cachedBoard)
+      setPagination(cachedMeta.pagination)
+      setAvailableSectors(cachedMeta.facets?.sectors || [])
+      setLoading(appLoading.leaderboard)
+      setError('')
+      return undefined
+    }
 
-  const filteredData = board.filter((analyst) => {
-    const side = analyst.best.includes('Short') ? 'bear' : 'bull'
-    const ticker = analyst.best.split(' · ')[0]
-    const sector = SECTOR_BY_TICKER[ticker] || 'Other'
-    const holdDays = Number.parseInt(analyst.avgHold, 10)
+    const controller = new AbortController()
+    const params = new URLSearchParams({
+      page: String(page),
+      pageSize: String(PAGE_SIZE),
+      side,
+      period,
+    })
+    if (sector !== 'all') params.set('sector', sector)
 
-    if (sideFilter !== 'all' && side !== sideFilter) return false
-    if (sectorFilter !== 'All Sectors' && sector !== sectorFilter) return false
-    if (periodFilter === 'lt30' && holdDays >= 30) return false
-    if (periodFilter === '30to90' && (holdDays < 30 || holdDays >= 90)) return false
-    if (periodFilter === '90plus' && holdDays < 90) return false
-    return true
-  })
+    setLoading(true)
+    setError('')
+    fetch(`/api/leaderboard?${params}`, { signal: controller.signal })
+      .then(async (response) => {
+        const data = await response.json().catch(() => null)
+        if (!response.ok) throw new Error(data?.error || 'Leaderboard unavailable')
+        return data
+      })
+      .then((data) => {
+        setBoard(Array.isArray(data?.items) ? data.items : [])
+        setPagination(data?.pagination || { page, pageSize: PAGE_SIZE, totalItems: 0, totalPages: 1 })
+        setAvailableSectors(data?.facets?.sectors || [])
+      })
+      .catch((requestError) => {
+        if (requestError.name !== 'AbortError') setError(requestError.message)
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false)
+      })
+    return () => controller.abort()
+  }, [appLoading.leaderboard, cachedBoard, cachedMeta, page, period, sector, side])
 
+  const sectorFilters = useMemo(
+    () => [...new Set([...SECTORS, ...availableSectors])].sort(),
+    [availableSectors],
+  )
+  const selectFilter = (setter, value) => {
+    setPage(1)
+    setter(value)
+  }
   const filterClass = (active) => `lb-filter ${active ? 'active' : ''} text-xs px-3 py-1 rounded`
+  const firstItem = pagination.totalItems ? (pagination.page - 1) * pagination.pageSize + 1 : 0
+  const lastItem = Math.min(pagination.page * pagination.pageSize, pagination.totalItems)
 
   return (
     <>
@@ -54,7 +89,7 @@ export default function Leaderboard() {
           <div>
             <div className="text-[10px] font-mono uppercase tracking-wider mb-1" style={{ color: 'var(--muted)' }}>Integrity-Protected Rankings</div>
             <h1 className="font-serif text-3xl font-medium tracking-tight">Leaderboard</h1>
-            <p className="text-sm mt-1" style={{ color: 'var(--ink-soft)' }}>Rankings based on system-locked entry timestamps. No deletions. No backdating. No edits to thesis bodies.</p>
+            <p className="text-sm mt-1" style={{ color: 'var(--ink-soft)' }}>Rankings based on system-locked entry timestamps. Filters recalculate each analyst from matching theses across their full portfolio.</p>
           </div>
           <div className="seal"><i className="icon-fingerprint text-[11px]"></i> Verified by Theses Protocol</div>
         </div>
@@ -62,25 +97,33 @@ export default function Leaderboard() {
         <div className="flex items-center flex-wrap gap-2 mt-6">
           <div className="flex max-w-full items-center gap-1 p-1 border rounded-md overflow-x-auto" style={{ borderColor: 'var(--border)', background: 'white' }}>
             {SIDE_FILTERS.map((filter) => (
-              <button key={filter.value} type="button" aria-pressed={sideFilter === filter.value} onClick={() => setSideFilter(filter.value)} className={filterClass(sideFilter === filter.value)}>{filter.label}</button>
+              <button key={filter.value} type="button" aria-pressed={side === filter.value} onClick={() => selectFilter(setSide, filter.value)} className={filterClass(side === filter.value)}>{filter.label}</button>
             ))}
           </div>
           <div className="flex max-w-full items-center gap-1 p-1 border rounded-md overflow-x-auto" style={{ borderColor: 'var(--border)', background: 'white' }}>
             {PERIOD_FILTERS.map((filter) => (
-              <button key={filter.value} type="button" aria-pressed={periodFilter === filter.value} onClick={() => setPeriodFilter(filter.value)} className={filterClass(periodFilter === filter.value)}>{filter.label}</button>
+              <button key={filter.value} type="button" aria-pressed={period === filter.value} onClick={() => selectFilter(setPeriod, filter.value)} className={filterClass(period === filter.value)}>{filter.label}</button>
             ))}
           </div>
-          <div className="flex max-w-full items-center gap-1 p-1 border rounded-md overflow-x-auto" style={{ borderColor: 'var(--border)', background: 'white' }}>
-            {SECTOR_FILTERS.map((sector) => (
-              <button key={sector} type="button" aria-pressed={sectorFilter === sector} onClick={() => setSectorFilter(sector)} className={filterClass(sectorFilter === sector)}>{sector}</button>
-            ))}
-          </div>
-          <div className="w-full sm:w-auto sm:ml-auto text-xs font-mono" style={{ color: 'var(--muted)' }}>{filteredData.length} displayed · {board.length} analyst{board.length === 1 ? '' : 's'}</div>
+          <select
+            value={sector}
+            onChange={(event) => selectFilter(setSector, event.target.value)}
+            aria-label="Filter leaderboard by sector"
+            className="max-w-full text-xs px-3 py-2 border rounded-md"
+            style={{ borderColor: 'var(--border)', background: 'white', color: 'var(--ink)' }}
+          >
+            <option value="all">All Sectors</option>
+            {sectorFilters.map((item) => <option key={item} value={item}>{item}</option>)}
+          </select>
+          <div className="w-full sm:w-auto sm:ml-auto text-xs font-mono" style={{ color: 'var(--muted)' }}>{pagination.totalItems} matching analyst{pagination.totalItems === 1 ? '' : 's'}</div>
         </div>
       </header>
 
       <div className="px-4 py-6 sm:px-6 lg:px-12">
-        <div className="border rounded-md overflow-x-auto" style={{ borderColor: 'var(--border)', background: 'white' }}>
+        {error && (
+          <div className="p-4 mb-5 border rounded-md text-sm" role="alert" style={{ borderColor: 'var(--bear)', color: 'var(--bear)' }}>{error}</div>
+        )}
+        <div className={`border rounded-md overflow-x-auto ${loading ? 'opacity-60' : ''}`} aria-busy={loading} style={{ borderColor: 'var(--border)', background: 'white' }}>
           <table className="w-full min-w-[850px]">
             <thead>
               <tr className="border-b" style={{ borderColor: 'var(--border)', background: 'var(--bg-warm)' }}>
@@ -95,48 +138,41 @@ export default function Leaderboard() {
               </tr>
             </thead>
             <tbody>
-              {filteredData.map((u, index) => {
-                const retClass = u.avgReturn >= 0 ? 'ret-pos' : 'ret-neg'
-                const sign = u.avgReturn >= 0 ? '+' : '−'
-                const displayedRank = index + 1
-                const isTop3 = displayedRank <= 3
+              {board.map((analyst) => {
+                const retClass = analyst.avgReturn >= 0 ? 'ret-pos' : 'ret-neg'
+                const sign = analyst.avgReturn >= 0 ? '+' : '−'
+                const isTop3 = analyst.rank <= 3
                 return (
-                  <tr key={u.userId} className="lb-row border-b last:border-b-0" style={{ borderColor: 'var(--border)', ...(u.isYou ? { background: 'var(--bg-warm)' } : {}) }}>
+                  <tr key={analyst.userId} className="lb-row border-b last:border-b-0" style={{ borderColor: 'var(--border)', ...(analyst.isYou ? { background: 'var(--bg-warm)' } : {}) }}>
                     <td className="px-4 py-3.5">
-                      {isTop3
-                        ? <span className="font-serif text-lg font-medium">{displayedRank}</span>
-                        : <span className="font-mono text-sm">{displayedRank}</span>}
+                      {isTop3 ? <span className="font-serif text-lg font-medium">{analyst.rank}</span> : <span className="font-mono text-sm">{analyst.rank}</span>}
                     </td>
                     <td className="px-4 py-3.5">
                       <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-full flex items-center justify-center font-mono text-xs font-semibold" style={{ background: u.isYou ? 'var(--ink)' : 'var(--bg-warm)', color: u.isYou ? 'white' : 'var(--ink)', border: `1px solid ${u.isYou ? 'var(--ink)' : 'var(--border)'}` }}>{u.avatar}</div>
+                        <div className="w-9 h-9 rounded-full flex items-center justify-center font-mono text-xs font-semibold" style={{ background: analyst.isYou ? 'var(--ink)' : 'var(--bg-warm)', color: analyst.isYou ? 'white' : 'var(--ink)', border: `1px solid ${analyst.isYou ? 'var(--ink)' : 'var(--border)'}` }}>{analyst.avatar}</div>
                         <div>
                           <div className="text-sm font-medium">
-                            {u.slug
-                              ? <Link href={`/analysts/${u.slug}`} className="hover:underline">{u.name}</Link>
-                              : u.name}
-                            {u.isYou && <span className="text-[9px] font-mono px-1.5 py-0.5 ml-2 rounded" style={{ background: 'var(--ink)', color: 'white' }}>YOU</span>}
+                            {analyst.slug ? <Link href={`/analysts/${analyst.slug}`} className="hover:underline">{analyst.name}</Link> : analyst.name}
+                            {analyst.isYou && <span className="text-[9px] font-mono px-1.5 py-0.5 ml-2 rounded" style={{ background: 'var(--ink)', color: 'white' }}>YOU</span>}
                           </div>
-                          <div className="text-[11px] font-mono" style={{ color: 'var(--muted)' }}>{u.handle}</div>
+                          <div className="text-[11px] font-mono" style={{ color: 'var(--muted)' }}>{analyst.handle}</div>
                         </div>
                       </div>
                     </td>
-                    <td className="px-4 py-3.5 text-right font-mono text-sm">{u.theses}</td>
-                    <td className="px-4 py-3.5 text-right font-mono text-sm">{u.winRate}%</td>
-                    <td className={`px-4 py-3.5 text-right font-mono text-sm font-semibold ${retClass}`}>{sign}{Math.abs(u.avgReturn).toFixed(1)}%</td>
-                    <td className={`px-4 py-3.5 text-right font-mono text-sm ${retClass}`}>{sign}{Math.abs(u.annualized).toFixed(1)}%</td>
-                    <td className="px-4 py-3.5 text-right font-mono text-sm" style={{ color: 'var(--ink-soft)' }}>{u.avgHold}</td>
-                    <td className="px-4 py-3.5">
-                      <div className="text-xs" style={{ color: 'var(--ink-soft)' }}>{u.best}</div>
-                    </td>
+                    <td className="px-4 py-3.5 text-right font-mono text-sm">{analyst.theses}</td>
+                    <td className="px-4 py-3.5 text-right font-mono text-sm">{analyst.winRate}%</td>
+                    <td className={`px-4 py-3.5 text-right font-mono text-sm font-semibold ${retClass}`}>{sign}{Math.abs(analyst.avgReturn).toFixed(1)}%</td>
+                    <td className={`px-4 py-3.5 text-right font-mono text-sm ${retClass}`}>{sign}{Math.abs(analyst.annualized).toFixed(1)}%</td>
+                    <td className="px-4 py-3.5 text-right font-mono text-sm" style={{ color: 'var(--ink-soft)' }}>{analyst.avgHold}</td>
+                    <td className="px-4 py-3.5"><div className="text-xs" style={{ color: 'var(--ink-soft)' }}>{analyst.best}</div></td>
                   </tr>
                 )
               })}
-              {filteredData.length === 0 && (
+              {!loading && !error && board.length === 0 && (
                 <tr>
                   <td colSpan={8} className="px-6 py-12 text-center">
                     <div className="font-serif text-lg font-medium">No analysts match these filters</div>
-                    <p className="text-xs mt-1" style={{ color: 'var(--muted)' }}>Try a different side, period, or sector.</p>
+                    <p className="text-xs mt-1" style={{ color: 'var(--muted)' }}>Try a different side, holding period, or sector.</p>
                   </td>
                 </tr>
               )}
@@ -145,11 +181,11 @@ export default function Leaderboard() {
         </div>
 
         <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between mt-6 text-xs" style={{ color: 'var(--muted)' }}>
-          <span>{filteredData.length ? `Showing 1–${filteredData.length} of ${filteredData.length} matching analysts` : 'Showing 0 matching analysts'}</span>
+          <span>{pagination.totalItems ? `Showing ${firstItem}–${lastItem} of ${pagination.totalItems} matching analysts` : 'Showing 0 matching analysts'}</span>
           <div className="leaderboard-pagination flex items-center gap-2">
-            <button type="button" disabled className="px-2 py-1 border rounded" style={{ borderColor: 'var(--border)' }}>Previous</button>
-            <span className="font-mono">Page 1 of 1</span>
-            <button type="button" disabled className="px-2 py-1 border rounded" style={{ borderColor: 'var(--border)' }}>Next</button>
+            <button type="button" disabled={loading || page <= 1} onClick={() => setPage((current) => current - 1)} className="px-2 py-1 border rounded" style={{ borderColor: 'var(--border)' }}>Previous</button>
+            <span className="font-mono">Page {pagination.page} of {pagination.totalPages}</span>
+            <button type="button" disabled={loading || page >= pagination.totalPages} onClick={() => setPage((current) => current + 1)} className="px-2 py-1 border rounded" style={{ borderColor: 'var(--border)' }}>Next</button>
           </div>
         </div>
       </div>

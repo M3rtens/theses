@@ -85,7 +85,16 @@ export default function DataProvider({ children }) {
   const userId = user?.id
   const [stored, setStored] = useState([])
   const [leaderboard, setLeaderboard] = useState([])
+  const [leaderboardMeta, setLeaderboardMeta] = useState({
+    pagination: { page: 1, pageSize: 25, totalItems: 0, totalPages: 1 },
+    facets: { sectors: [] },
+    viewer: null,
+  })
   const [discover, setDiscover] = useState([])
+  const [discoverMeta, setDiscoverMeta] = useState({
+    pagination: { page: 1, pageSize: 12, totalItems: 0, totalPages: 1 },
+    facets: { sectors: [] },
+  })
   const [drafts, setDrafts] = useState([])
   const [scheduled, setScheduled] = useState([])
   const [notifications, setNotifications] = useState([])
@@ -134,8 +143,17 @@ export default function DataProvider({ children }) {
   const loadLeaderboard = useCallback(async () => {
     try {
       const r = await fetch('/api/leaderboard')
-      const rows = r.ok ? await r.json() : []
-      if (Array.isArray(rows)) setLeaderboard(rows)
+      const data = r.ok ? await r.json() : null
+      if (Array.isArray(data?.items)) {
+        setLeaderboard(data.items)
+        setLeaderboardMeta({
+          pagination: data.pagination,
+          facets: data.facets || { sectors: [] },
+          viewer: data.viewer || null,
+        })
+      } else if (Array.isArray(data)) {
+        setLeaderboard(data)
+      }
     } catch {
       /* leaderboard unavailable */
     } finally {
@@ -146,8 +164,13 @@ export default function DataProvider({ children }) {
   const loadDiscover = useCallback(async () => {
     try {
       const r = await fetch('/api/discover')
-      const rows = r.ok ? await r.json() : []
-      if (Array.isArray(rows)) setDiscover(rows)
+      const data = r.ok ? await r.json() : null
+      if (Array.isArray(data?.items)) {
+        setDiscover(data.items)
+        setDiscoverMeta({ pagination: data.pagination, facets: data.facets || { sectors: [] } })
+      } else if (Array.isArray(data)) {
+        setDiscover(data)
+      }
     } catch {
       /* feed unavailable */
     } finally {
@@ -407,7 +430,9 @@ export default function DataProvider({ children }) {
   const value = {
     stored,
     leaderboard,
+    leaderboardMeta,
     discover,
+    discoverMeta,
     drafts,
     scheduled,
     notifications,

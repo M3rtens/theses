@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import ThesisCard from '../components/ThesisCard.jsx'
 import { useUser } from '../components/UserProvider.jsx'
-import { useLeaderboard } from '../lib/useLeaderboard.js'
+import { useLeaderboardMeta } from '../lib/useLeaderboard.js'
 import { loadDrafts, relativeTime } from '../lib/drafts.js'
 import { useLiveTheses } from '../lib/useLiveTheses.js'
 import { useStoredTheses } from '../lib/useStoredTheses.js'
@@ -32,8 +32,8 @@ export default function Dashboard({ navigate }) {
   const wins = closed.filter((t) => retOf(t) > 0).length
   const winRate = closed.length ? Math.round((wins / closed.length) * 100) : null
   // Rank comes from the database-computed leaderboard.
-  const board = useLeaderboard()
-  const me = board.find((r) => r.isYou)
+  const leaderboardMeta = useLeaderboardMeta()
+  const me = leaderboardMeta.viewer
 
   // Trigger alerts, derived live from the theses themselves. useStoredTheses()
   // loads via POST /api/theses/evaluate, which recomputes and persists each
@@ -106,7 +106,7 @@ export default function Dashboard({ navigate }) {
             <div className="text-[10px] font-mono uppercase tracking-wider mb-2" style={{ color: 'var(--muted)' }}>Leaderboard Rank</div>
             <div className="flex flex-col sm:flex-row sm:items-baseline gap-1 sm:gap-2">
               <span className="font-serif text-3xl sm:text-4xl font-medium">{me ? `#${me.rank}` : '—'}</span>
-              <span className="text-xs num-mono" style={{ color: 'var(--ink-soft)' }}>of {board.length}</span>
+              <span className="text-xs num-mono" style={{ color: 'var(--ink-soft)' }}>of {leaderboardMeta.pagination.totalItems}</span>
             </div>
           </div>
         </div>

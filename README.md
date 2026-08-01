@@ -91,7 +91,9 @@ This is still a prototype rather than a production-ready service. See [Known lim
 
 - Public Discover feed built from all published theses.
 - Database-wide analyst leaderboard.
-- Search, sorting, and filtering controls.
+- Server-side Discover and leaderboard pagination with validated query limits and complete result counts.
+- Discover search, sector filtering, and trending/newest/performance sorting across the full public dataset.
+- Leaderboard side, sector, and holding-period filters that recalculate statistics and ranks from every matching thesis in each analyst's complete portfolio.
 - Canonical `/theses/[id]` and `/analysts/[slug]` pages that survive refreshes and can be shared directly.
 - Public analyst profiles backed by explicit profile fields and published-thesis statistics.
 - Thesis-specific and analyst-specific Open Graph images, metadata, canonical links, native sharing, and copy-link controls.
@@ -332,8 +334,8 @@ supabase/migrations/           Versioned database integrity migrations
 | `/api/lifecycle-jobs/[id]/retry` | `POST` | Retry an action-required publication or close job. |
 | `/api/internal/lifecycle` | `POST` | Authenticated Cron worker for scheduled publication and closing. |
 | `/api/internal/refresh` | `POST` | Authenticated Cron worker for 15-minute return and trigger refreshes. |
-| `/api/discover` | `GET` | Return the public community thesis feed. |
-| `/api/leaderboard` | `GET` | Compute database-wide analyst rankings. |
+| `/api/discover` | `GET` | Return a filtered, sorted page from the public community thesis feed. |
+| `/api/leaderboard` | `GET` | Compute and paginate full-portfolio analyst rankings and filters. |
 | `/api/search` | `GET` | Search Yahoo Finance securities. |
 | `/api/quotes` | `GET` | Fetch lightweight quotes for a symbol list. |
 | `/api/cards` | `POST` | Fetch entry/current price data for thesis cards. |
@@ -391,7 +393,6 @@ Before deploying elsewhere, confirm that the host supports the Node.js runtime u
 - Notifications are in-app only and are polled once per minute; email and push delivery are not implemented.
 - Market data is dependent on Yahoo Finance availability and is polled rather than streamed.
 - Public request limiting is process-local; configure a shared deployment-edge limit for multi-instance production enforcement.
-- The leaderboard's side and sector filters infer those properties from each analyst's best thesis rather than aggregating full portfolio exposure.
 - Automated tests do not yet exercise Supabase policies/functions against a disposable database or cover a full browser publish-to-close workflow.
 
 ## License

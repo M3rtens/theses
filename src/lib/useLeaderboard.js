@@ -6,3 +6,7 @@ import { useData } from '../components/DataProvider.jsx'
 export function useLeaderboard() {
   return useData().leaderboard
 }
+
+export function useLeaderboardMeta() {
+  return useData().leaderboardMeta
+}
