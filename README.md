@@ -34,6 +34,7 @@ This is still a prototype rather than a production-ready service. See [Known lim
 - Optional email confirmation through `/auth/confirm`.
 - Google OAuth through `/auth/callback`.
 - Editable display name stored in Supabase Auth metadata.
+- Owner-only cloud profile details for bio and location, with an offline browser copy, Auth-backed join date, and server-managed verification status.
 - Account deletion performed server-side with the Supabase service-role key.
 
 ### Thesis authoring
@@ -182,7 +183,7 @@ Apply the committed files in `supabase/migrations` in filename order. They are i
 | Table | Required columns |
 | --- | --- |
 | `theses` | `id`, `user_id`, `data` (`jsonb`), `status`, `created_at` |
-| `profiles` | `id`, `name`, `handle`, `avatar`, `updated_at` |
+| `profiles` | `id`, identity fields, `bio`, `location`, `joined_at`, `verified`, `updated_at` |
 | `drafts` | Created by `202608010003_cloud_drafts.sql`; owner, JSONB content, local identity, version, and timestamps |
 
 The resulting data contract is:
@@ -192,10 +193,11 @@ The resulting data contract is:
 - Signed-in users can read only their own drafts; draft writes go through authenticated server routes and use version checks.
 - Thesis creation and all post-publication mutations go through authenticated server routes and service-only database functions.
 - Users can insert or update only the profile whose `id` matches their Auth user ID.
+- Profile join dates are sourced from `auth.users.created_at`; owners cannot rewrite them or self-assign verification.
 - `theses.user_id` and `profiles.id` reference `auth.users.id`.
 - Account deletion cascades from `auth.users` to associated application data.
 
-The base migration creates the tables and owner-scoped policies. The core-integrity migration then adds the version counter and indexes, immutable-field trigger, restricted public view, service-only atomic mutation functions, and final thesis privileges. The automated-lifecycle migration adds private lifecycle jobs, notifications, refresh leases, automatic publication/closing functions, and the 15-minute monitoring contract. The cloud-drafts migration adds the private versioned draft store. The application has temporary offline/compatibility fallbacks, but production should apply the full chain.
+The base migration creates the tables and owner-scoped policies. The core-integrity migration then adds the version counter and indexes, immutable-field trigger, restricted public view, service-only atomic mutation functions, and final thesis privileges. The automated-lifecycle migration adds private lifecycle jobs, notifications, refresh leases, automatic publication/closing functions, and the 15-minute monitoring contract. The final two migrations add versioned cloud drafts and durable profile details. The application has temporary offline/compatibility fallbacks, but production should apply the full chain.
 
 If the Supabase CLI is configured for your project, migrations can be applied with:
 
@@ -205,7 +207,7 @@ supabase db push
 
 Review the migrations in a staging project and back up production data before applying them. They preserve the JSONB storage contract, but the integrity migration replaces existing policies on the app-owned `profiles` and `theses` tables and changes thesis write privileges.
 
-For an existing environment that already has the earlier migrations, run `supabase/migrations/202608010003_cloud_drafts.sql` in the Supabase dashboard’s SQL Editor (or use `supabase db push`). Until it is applied, edits remain safe in the current browser but cannot sync across devices.
+For an existing environment that already has the lifecycle migration, run `202608010003_cloud_drafts.sql` followed by `202608010004_cloud_profiles.sql` in the Supabase dashboard’s SQL Editor (or use `supabase db push`). Until they are applied, edits remain safe in the current browser but cannot sync across devices.
 
 ### 5. Enable lifecycle scheduling
 
@@ -300,9 +302,8 @@ supabase/migrations/           Versioned database integrity migrations
 - Notifications are owner-scoped rows with idempotent event keys and read timestamps.
 - A database trigger seals publication fields; row-locked service functions can change only lifecycle, update-log, market, and trigger-status fields.
 - Anonymous community reads use the explicit `published_theses` projection rather than the complete JSON document.
-- Public profile identity is stored in `profiles`.
+- Profile identity, bio, optional location, Auth-backed join date, and server-managed verification are stored in `profiles`; the browser retains an owner-scoped offline copy of editable details.
 - Drafts are stored in owner-only `drafts` rows with a monotonically increasing version. The browser keeps an offline cache, imports legacy local drafts after a successful cloud connection, and creates a separate conflict copy when versions diverge.
-- The profile bio is also stored in browser `localStorage`.
 - Shared client datasets are cached in `DataProvider`.
 
 ### API routes
@@ -316,6 +317,7 @@ supabase/migrations/           Versioned database integrity migrations
 | `/api/theses/evaluate` | `POST` | Compatibility read endpoint; scheduled workers own durable refreshes. |
 | `/api/drafts` | `GET`, `POST` | List or create owner-only cloud drafts. |
 | `/api/drafts/[id]` | `PATCH`, `DELETE` | Version-check or delete an owner-only cloud draft. |
+| `/api/profile` | `GET`, `PATCH` | Read or save owner-only profile details. |
 | `/api/scheduled-publications` | `GET`, `POST` | List or create owner-only scheduled publications. |
 | `/api/scheduled-publications/[id]` | `PATCH`, `DELETE` | Edit, cancel, retry, or delete an unpublished scheduled record. |
 | `/api/scheduled-publications/[id]/publish-now` | `POST` | Publish a scheduled/private server draft immediately. |
@@ -373,8 +375,7 @@ Before deploying elsewhere, confirm that the host supports the Node.js runtime u
 
 ## Known limitations
 
-- Every migration, including the cloud-drafts migration, must be applied to each Supabase environment; committing it does not change a remote database automatically.
-- Profile bios remain local to one browser and are not synchronized across devices.
+- Every migration, including the cloud-drafts and cloud-profiles migrations, must be applied to each Supabase environment; committing them does not change a remote database automatically.
 - Dropping a Word document currently displays import progress messages but does not parse or insert the document.
 - The rich-text editor uses browser `contentEditable` and `document.execCommand`; it is not backed by Tiptap or another structured editor framework.
 - The editor's embedded-chart command inserts a placeholder block, and the Charts tab does not yet contain a chart builder.
@@ -382,7 +383,6 @@ Before deploying elsewhere, confirm that the host supports the Node.js runtime u
 - Notifications are in-app only and are polled once per minute; email and push delivery are not implemented.
 - Market data is dependent on Yahoo Finance availability and is polled rather than streamed.
 - Public request limiting is process-local; configure a shared deployment-edge limit for multi-instance production enforcement.
-- The profile's joined date, location, and verification label are currently static presentation copy.
 - The leaderboard's side and sector filters infer those properties from each analyst's best thesis rather than aggregating full portfolio exposure.
 - Automated tests do not yet exercise Supabase policies/functions against a disposable database or cover a full browser publish-to-close workflow.
 

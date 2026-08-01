@@ -1,31 +1,61 @@
-// Client-side profile settings (the editable parts of the profile that have no
-// backend yet — currently just the analyst's description). Persisted to
-// localStorage, following the same pattern as drafts. Kept in one place so the
-// Profile view reads and writes through a single source.
+// Browser profile storage is an offline cache for the owner-only cloud row.
+// The old unscoped key is read once so existing bios can migrate safely.
+const LEGACY_KEY = 'theses.profile'
+const keyFor = (userId) => `theses.profile::${userId || 'anon'}`
 
-const KEY = 'theses.profile'
+export const DEFAULT_BIO = ''
+export const DEFAULT_PROFILE = {
+  bio: DEFAULT_BIO,
+  location: '',
+  joinedAt: null,
+  verified: false,
+  updatedAt: null,
+  savedAt: null,
+  dirty: false,
+}
 
-export const DEFAULT_BIO =
-  'Long-biased equity analyst focused on capital-intensive monopolies and structural supply constraints. CFA Charterholder. Former sell-side at Bernstein.'
+const normalize = (value, metadata = {}) => ({
+  ...DEFAULT_PROFILE,
+  ...(value && typeof value === 'object' ? value : {}),
+  ...metadata,
+})
 
-// Read stored profile settings. Never throws — a corrupt store yields defaults.
-export const loadProfile = () => {
+export const loadProfile = (userId) => {
   try {
-    const raw = localStorage.getItem(KEY)
-    const parsed = raw ? JSON.parse(raw) : {}
-    return { bio: DEFAULT_BIO, ...(parsed && typeof parsed === 'object' ? parsed : {}) }
+    const scoped = localStorage.getItem(keyFor(userId))
+    if (scoped) return normalize(JSON.parse(scoped))
+
+    const legacy = localStorage.getItem(LEGACY_KEY)
+    if (legacy) return normalize(JSON.parse(legacy), { dirty: true, legacy: true })
   } catch {
-    return { bio: DEFAULT_BIO }
+    // Corrupt or unavailable browser storage falls through to safe defaults.
+  }
+  return { ...DEFAULT_PROFILE }
+}
+
+export const saveProfile = (patch, userId, { dirty = true } = {}) => {
+  const next = normalize({
+    ...loadProfile(userId),
+    ...patch,
+    savedAt: Date.now(),
+    dirty,
+    legacy: false,
+  })
+  try {
+    localStorage.setItem(keyFor(userId), JSON.stringify(next))
+    return next
+  } catch {
+    return null
   }
 }
 
-// Merge a patch into the stored profile and return the updated settings.
-export const saveProfile = (patch) => {
+export const markProfileSynced = (profile, userId) => {
+  const next = saveProfile(profile, userId, { dirty: false })
+  if (!next) return null
   try {
-    const next = { ...loadProfile(), ...patch }
-    localStorage.setItem(KEY, JSON.stringify(next))
-    return next
+    localStorage.removeItem(LEGACY_KEY)
   } catch {
-    return loadProfile()
+    // The scoped copy was written successfully; legacy cleanup is optional.
   }
+  return next
 }

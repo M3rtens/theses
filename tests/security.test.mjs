@@ -12,6 +12,7 @@ import {
   validateHistoryDate,
   validateLifecyclePayload,
   validateNotificationReadPayload,
+  validateProfilePayload,
   validateScheduledPublicationPayload,
   validateThesisPayload,
   validateUpdatePayload,
@@ -131,6 +132,18 @@ test('cloud draft validation permits incomplete work and requires optimistic ver
   assert.equal(validateDraftUpdatePayload({ draft: created.draft, version: 3 }).version, 3)
   assert.throws(() => validateDraftUpdatePayload({ draft: created.draft, version: 0 }), /positive integer/)
   assert.throws(() => validateDraftCreatePayload({ draft: created.draft, localId: '../unsafe' }), /unsupported characters/)
+})
+
+test('cloud profile validation trims owner-editable fields and enforces limits', () => {
+  assert.deepEqual(validateProfilePayload({
+    bio: '  Long-term fundamental investor.  ',
+    location: '  Sydney, Australia  ',
+  }), {
+    bio: 'Long-term fundamental investor.',
+    location: 'Sydney, Australia',
+  })
+  assert.throws(() => validateProfilePayload({ bio: 'x'.repeat(281), location: '' }), /280 characters/)
+  assert.throws(() => validateProfilePayload({ bio: '', location: '', verified: true }), /unsupported field/)
 })
 
 test('date and lifecycle validation rejects impossible and stale dates', () => {
@@ -349,6 +362,10 @@ test('core integrity migration seals theses and restricts public reads', async (
     new URL('../supabase/migrations/202608010003_cloud_drafts.sql', import.meta.url),
     'utf8',
   )
+  const cloudProfiles = await readFile(
+    new URL('../supabase/migrations/202608010004_cloud_profiles.sql', import.meta.url),
+    'utf8',
+  )
   const cron = await readFile(
     new URL('../supabase/cron/setup_lifecycle.sql', import.meta.url),
     'utf8',
@@ -395,4 +412,14 @@ test('core integrity migration seals theses and restricts public reads', async (
   assert.match(cloudDrafts, /using \(auth\.uid\(\) = user_id\)/i)
   assert.match(cloudDrafts, /revoke all on public\.drafts from public, anon, authenticated/i)
   assert.match(cloudDrafts, /grant select on public\.drafts to authenticated/i)
+  assert.match(cloudProfiles, /add column if not exists bio text/i)
+  assert.match(cloudProfiles, /add column if not exists location text/i)
+  assert.match(cloudProfiles, /add column if not exists joined_at timestamptz/i)
+  assert.match(cloudProfiles, /add column if not exists verified boolean/i)
+  assert.match(cloudProfiles, /set joined_at = auth_user\.created_at/i)
+  assert.match(cloudProfiles, /new\.verified := false/i)
+  assert.match(cloudProfiles, /profile_verification_is_server_managed/i)
+  assert.match(cloudProfiles, /create trigger enforce_profile_integrity/i)
+  assert.match(cloudProfiles, /revoke update on public\.profiles from authenticated/i)
+  assert.match(cloudProfiles, /grant update \(id, name, handle, avatar, bio, location, updated_at\)/i)
 })

@@ -23,6 +23,7 @@ export function deriveIdentity(user) {
     avatar: initialsOf(name),
     email,
     picture: meta.avatar_url || meta.picture || null,
+    createdAt: user?.created_at || null,
   }
 }
 

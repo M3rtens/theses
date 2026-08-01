@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import ThesisCard from '../components/ThesisCard.jsx'
 import DeleteAccountModal from '../components/DeleteAccountModal.jsx'
 import { useUser } from '../components/UserProvider.jsx'
-import { loadProfile, saveProfile } from '../lib/profile.js'
+import { DEFAULT_PROFILE, loadProfile, markProfileSynced, saveProfile } from '../lib/profile.js'
 import { makeRetOf, selfStats } from '../lib/stats.js'
 import { createClient } from '../lib/supabase/client'
 import { useLeaderboard } from '../lib/useLeaderboard.js'
@@ -15,6 +15,19 @@ const THESIS_FILTERS = [
   { value: 'active', label: 'Active' },
   { value: 'closed', label: 'Closed' },
 ]
+
+async function readProfileResponse(response) {
+  const data = await response.json().catch(() => null)
+  if (!response.ok) throw new Error(data?.error || `HTTP ${response.status}`)
+  return data
+}
+
+const joinedLabel = (value) => {
+  if (!value) return 'Join date unavailable'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return 'Join date unavailable'
+  return `Joined ${date.toLocaleDateString('en-AU', { month: 'short', year: 'numeric' })}`
+}
 
 export default function Profile({ navigate }) {
   const user = useUser()
@@ -32,34 +45,89 @@ export default function Profile({ navigate }) {
   const signed = (n) => `${n >= 0 ? '+' : '−'}${Math.abs(n).toFixed(1)}%`
   const retClass = (n) => (n >= 0 ? 'ret-pos' : 'ret-neg')
 
-  // Inline profile editor. `editing` holds the {name, bio} draft while open
-  // (null when closed). Bio persists to localStorage; name is written to the
-  // Supabase auth account so it flows back through the identity context.
-  const [bio, setBio] = useState('')
+  // Profile details are owner-only cloud data with a per-user browser copy for
+  // offline recovery. Display name remains Auth metadata and is mirrored into
+  // the public identity columns by App.
+  const [profile, setProfile] = useState(() => ({ ...DEFAULT_PROFILE }))
+  const [profileStatus, setProfileStatus] = useState('loading')
   const [editing, setEditing] = useState(null)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState('')
-  useEffect(() => { setBio(loadProfile().bio) }, [])
+  const profileRequestRef = useRef(0)
+  const profileSyncPromiseRef = useRef(Promise.resolve())
+  useEffect(() => {
+    if (!user?.id) return undefined
+    let cancelled = false
+    const requestId = profileRequestRef.current + 1
+    profileRequestRef.current = requestId
+    const local = loadProfile(user.id)
+    setProfile(local)
+    setProfileStatus('loading')
 
-  const openEditor = () => { setSaveError(''); setEditing({ name: me?.name || '', bio }) }
+    const sync = async () => {
+      try {
+        let cloud = await readProfileResponse(await fetch('/api/profile'))
+        if (local.dirty) {
+          cloud = await readProfileResponse(await fetch('/api/profile', {
+            method: 'PATCH',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ bio: local.bio || '', location: local.location || '' }),
+          }))
+        }
+        if (!cancelled && profileRequestRef.current === requestId) {
+          const cached = markProfileSynced(cloud, user.id)
+          setProfile(cached || cloud)
+          setProfileStatus('cloud')
+        }
+      } catch {
+        if (!cancelled && profileRequestRef.current === requestId) setProfileStatus('offline')
+      }
+    }
+    profileSyncPromiseRef.current = sync()
+    return () => { cancelled = true }
+  }, [user?.id])
+
+  const openEditor = () => {
+    setSaveError('')
+    setEditing({ name: me?.name || '', bio: profile.bio || '', location: profile.location || '' })
+  }
 
   const saveEdits = async () => {
+    const pendingSync = profileSyncPromiseRef.current
+    profileRequestRef.current += 1
     setSaving(true)
     setSaveError('')
     try {
-      // Persist the bio locally.
-      setBio(saveProfile({ bio: editing.bio.trim() }).bio)
+      // Serialize behind the initial local-to-cloud migration so an older
+      // pending write cannot land after this explicit save.
+      await pendingSync.catch(() => null)
+      const details = { bio: editing.bio.trim(), location: editing.location.trim() }
+      const local = saveProfile(details, user.id)
+      setProfile(local || { ...profile, ...details, dirty: true })
+      setProfileStatus('saving')
+
       // Persist a changed name to the auth account, then refresh so the
       // identity context re-derives from the updated metadata.
       const newName = editing.name.trim()
+      let identityChanged = false
       if (newName && newName !== me?.name) {
         const { error } = await createClient().auth.updateUser({ data: { full_name: newName } })
         if (error) throw error
-        router.refresh()
+        identityChanged = true
       }
+
+      const cloud = await readProfileResponse(await fetch('/api/profile', {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(details),
+      }))
+      setProfile(markProfileSynced(cloud, user.id) || cloud)
+      setProfileStatus('cloud')
       setEditing(null)
+      if (identityChanged) router.refresh()
     } catch (e) {
-      setSaveError(e.message || 'Could not save changes.')
+      setProfileStatus('offline')
+      setSaveError(`${e.message || 'Could not reach the cloud.'} Your profile details remain saved in this browser.`)
     } finally {
       setSaving(false)
     }
@@ -120,11 +188,23 @@ export default function Profile({ navigate }) {
           <div className="flex-1">
             <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-1">
               <h1 className="font-serif text-2xl sm:text-3xl font-medium tracking-tight">{me?.name || 'You'}</h1>
-              <span className="seal"><i className="icon-badge-check text-[11px]"></i> Verified Analyst</span>
+              {profile.verified && <span className="seal"><i className="icon-badge-check text-[11px]"></i> Verified Analyst</span>}
             </div>
-            <div className="text-sm font-mono" style={{ color: 'var(--muted)' }}>{me?.handle || ''} · Joined Jan 2022</div>
+            <div className="text-sm font-mono" style={{ color: 'var(--muted)' }}>
+              {[me?.handle || '', joinedLabel(profile.joinedAt || user?.createdAt), profile.location].filter(Boolean).join(' · ')}
+            </div>
             {editing === null ? (
-              <p className="text-sm mt-2 max-w-xl" style={{ color: 'var(--ink-soft)' }}>{bio}</p>
+              <>
+                <p className="text-sm mt-2 max-w-xl" style={{ color: profile.bio ? 'var(--ink-soft)' : 'var(--muted)' }}>
+                  {profile.bio || 'Add a short bio to introduce your investment approach.'}
+                </p>
+                <div className="text-[10px] font-mono uppercase tracking-wider mt-2" style={{ color: profileStatus === 'offline' ? 'var(--bear)' : 'var(--muted)' }}>
+                  {profileStatus === 'loading' && 'Loading cloud profile…'}
+                  {profileStatus === 'saving' && 'Saving profile…'}
+                  {profileStatus === 'cloud' && 'Cloud profile synced'}
+                  {profileStatus === 'offline' && 'Offline · browser copy available'}
+                </div>
+              </>
             ) : (
               <div className="mt-3 max-w-xl">
                 <label className="block text-[10px] font-mono uppercase tracking-wider mb-1" style={{ color: 'var(--muted)' }}>Display name</label>
@@ -133,6 +213,16 @@ export default function Profile({ navigate }) {
                   value={editing.name}
                   onChange={(e) => setEditing({ ...editing, name: e.target.value })}
                   autoFocus
+                  className="w-full text-sm p-2 border rounded mb-3"
+                  style={{ borderColor: 'var(--border)', background: 'white', color: 'var(--ink)' }}
+                />
+                <label className="block text-[10px] font-mono uppercase tracking-wider mb-1" style={{ color: 'var(--muted)' }}>Location</label>
+                <input
+                  type="text"
+                  value={editing.location}
+                  onChange={(e) => setEditing({ ...editing, location: e.target.value })}
+                  maxLength={100}
+                  placeholder="Sydney, Australia"
                   className="w-full text-sm p-2 border rounded mb-3"
                   style={{ borderColor: 'var(--border)', background: 'white', color: 'var(--ink)' }}
                 />

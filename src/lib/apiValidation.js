@@ -16,6 +16,7 @@ const MAX_MODEL_BYTES = 1_750_000
 export const REQUEST_LIMITS = {
   publish: 2_000_000,
   draft: 2_000_000,
+  profile: 4_000,
   update: 16_000,
   lifecycle: 4_000,
   cards: 64_000,
@@ -319,6 +320,15 @@ export function validateThesisPayload(body) {
     body: sanitizeThesisHtml(html),
     triggers: cleanTriggers(body.triggers),
     model: cleanWorkbookModel(body.model),
+  }
+}
+
+export function validateProfilePayload(body) {
+  if (!isPlainObject(body)) fail('profile must be an object')
+  assertAllowedKeys(body, new Set(['bio', 'location']), 'profile')
+  return {
+    bio: cleanString(body.bio, { label: 'bio', max: 280 }),
+    location: cleanString(body.location, { label: 'location', max: 100 }),
   }
 }
 
