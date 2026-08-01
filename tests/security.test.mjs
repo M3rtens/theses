@@ -16,6 +16,7 @@ import {
   validateNotificationReadPayload,
   validateProfilePayload,
   validateScheduledPublicationPayload,
+  validateSavedSearchPayload,
   validateSocialMutationPayload,
   validateThesisPayload,
   validateUpdatePayload,
@@ -370,6 +371,24 @@ test('discussion validation bounds comments, replies, and reports', () => {
   assert.throws(() => validateCommentReportPayload({ reason: 'disagree' }), /unsupported report reason/)
 })
 
+test('saved Discover searches validate the shared filter contract', () => {
+  const saved = validateSavedSearchPayload({
+    name: 'Software shorts',
+    filters: {
+      query: 'margin pressure', sector: 'Software', side: 'bear', status: 'active',
+      published: '30d', performance: 'negative', sort: 'discussed',
+    },
+    notifyEnabled: true,
+  })
+  assert.equal(saved.name, 'Software shorts')
+  assert.equal(saved.filters.published, '30d')
+  assert.equal(saved.filters.sort, 'discussed')
+  assert.equal(saved.notifyEnabled, true)
+  assert.throws(() => validateSavedSearchPayload({
+    name: 'Invalid', filters: { sort: 'viral' },
+  }), /unsupported saved search sort/)
+})
+
 test('exchange-local scheduling requires a fresh regular-session snapshot', () => {
   const now = Date.parse('2026-08-03T15:00:00.000Z')
   assert.equal(calendarDateInTimezone('2026-08-01T00:30:00.000Z', 'America/New_York'), '2026-07-31')
@@ -590,11 +609,15 @@ test('public thesis projection maps only explicit fields and sanitizes HTML', ()
 })
 
 test('community query validation bounds pages and accepts supported filters', () => {
-  assert.deepEqual(parseDiscoverQuery(new URLSearchParams('page=2&pageSize=10&sort=top&q=growth&sector=Software')), {
+  assert.deepEqual(parseDiscoverQuery(new URLSearchParams('page=2&pageSize=10&sort=top&q=growth&sector=Software&side=bull&status=active&published=30d&performance=positive')), {
     page: 2,
     pageSize: 10,
     query: 'growth',
     sector: 'Software',
+    side: 'bull',
+    status: 'active',
+    published: '30d',
+    performance: 'positive',
     sort: 'top',
   })
   assert.deepEqual(parseLeaderboardQuery(new URLSearchParams('side=bear&period=90plus&sector=Energy')), {
@@ -605,6 +628,7 @@ test('community query validation bounds pages and accepts supported filters', ()
     sector: 'Energy',
   })
   assert.throws(() => parseDiscoverQuery(new URLSearchParams('pageSize=51')), /between 1 and 50/)
+  assert.throws(() => parseDiscoverQuery(new URLSearchParams('performance=moon')), /unsupported performance/)
   assert.throws(() => parseLeaderboardQuery(new URLSearchParams('side=neutral')), /unsupported side/)
 })
 
@@ -621,6 +645,15 @@ test('community pagination and leaderboard filters use complete thesis portfolio
   assert.equal(discover.pagination.totalItems, 2)
   assert.equal(discover.items[0].id, 1)
   assert.deepEqual(discover.facets.sectors, ['Energy', 'Software'])
+
+  const advanced = buildDiscoverPage([
+    ...theses,
+    { id: 4, ownerId: 'c', author: 'Gamma Research', handle: '@gamma', ticker: 'CCC', company: 'Cloud Co', title: 'Efficiency', body: '<p>Durable recurring revenue</p>', side: 'bear', sector: 'Software', daysActive: 5, ret: -3, status: 'active', updates: 1, commentCount: 4, bookmarkCount: 2, createdAt: '2026-08-01T00:00:00Z' },
+  ], {
+    page: 1, pageSize: 25, query: 'recurring', sector: 'all', side: 'bear',
+    status: 'active', published: '7d', performance: 'negative', sort: 'discussed',
+  }, Date.parse('2026-08-02T00:00:00Z'))
+  assert.deepEqual(advanced.items.map((row) => row.id), [4])
 
   const shortBoard = buildLeaderboardPage(theses, {
     page: 1, pageSize: 25, side: 'bear', period: 'all', sector: 'all',
@@ -680,6 +713,10 @@ test('core integrity migration seals theses and restricts public reads', async (
   )
   const citations = await readFile(
     new URL('../supabase/migrations/202608020003_thesis_citations.sql', import.meta.url),
+    'utf8',
+  )
+  const savedSearches = await readFile(
+    new URL('../supabase/migrations/202608020004_saved_discover_searches.sql', import.meta.url),
     'utf8',
   )
   const cron = await readFile(
@@ -767,4 +804,10 @@ test('core integrity migration seals theses and restricts public reads', async (
   assert.match(citations, /create or replace view public\.published_theses/i)
   assert.match(citations, /t\.data -> 'citations' as citations/i)
   assert.match(citations, /grant select on public\.published_theses to anon, authenticated, service_role/i)
+  assert.match(savedSearches, /create table if not exists public\.saved_searches/i)
+  assert.match(savedSearches, /saved_search_limit_reached/i)
+  assert.match(savedSearches, /create trigger notify_saved_search_matches/i)
+  assert.match(savedSearches, /saved_search_match/i)
+  assert.match(savedSearches, /comments\.status = 'visible'/i)
+  assert.match(savedSearches, /bookmarks\.thesis_id = t\.id/i)
 })

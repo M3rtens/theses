@@ -2,6 +2,13 @@ import { sanitizeThesisHtml } from './html.js'
 import { normalizePublicUrl } from './urls.js'
 import { CHART_TYPES, normalizeChartRange, parseChartRange } from './charts.js'
 import { CITATION_ID, MAX_CITATIONS, citationIdsInHtml, normalizeCitationUrl } from './citations.js'
+import {
+  DISCOVER_PERFORMANCE_VALUES,
+  DISCOVER_PUBLISHED_VALUES,
+  DISCOVER_SIDE_VALUES,
+  DISCOVER_SORT_VALUES,
+  DISCOVER_STATUS_VALUES,
+} from './community.js'
 
 const textEncoder = new TextEncoder()
 const SYMBOL = /^[A-Z0-9^][A-Z0-9.^=/_-]{0,63}$/
@@ -26,6 +33,7 @@ export const REQUEST_LIMITS = {
   social: 4_000,
   comment: 8_000,
   report: 4_000,
+  savedSearch: 8_000,
 }
 
 export class RequestValidationError extends Error {
@@ -570,6 +578,33 @@ export function validateCommentReportPayload(body) {
   return {
     reason,
     details: cleanString(body.details, { label: 'report details', max: 500 }),
+  }
+}
+
+export function validateSavedSearchPayload(body) {
+  if (!isPlainObject(body)) fail('saved search must be an object')
+  assertAllowedKeys(body, new Set(['name', 'filters', 'notifyEnabled']), 'saved search')
+  if (!isPlainObject(body.filters)) fail('saved search filters must be an object')
+  assertAllowedKeys(body.filters, new Set([
+    'query', 'sector', 'side', 'status', 'published', 'performance', 'sort',
+  ]), 'saved search filters')
+  const pick = (value, allowed, fallback, label) => {
+    const selected = String(value || fallback)
+    if (!allowed.includes(selected)) fail(`unsupported saved search ${label}`)
+    return selected
+  }
+  return {
+    name: cleanString(body.name, { label: 'saved search name', max: 80, required: true }),
+    filters: {
+      query: cleanString(body.filters.query, { label: 'saved search query', max: 100 }),
+      sector: cleanString(body.filters.sector, { label: 'saved search sector', max: 80 }) || 'all',
+      side: pick(body.filters.side, DISCOVER_SIDE_VALUES, 'all', 'side'),
+      status: pick(body.filters.status, DISCOVER_STATUS_VALUES, 'all', 'status'),
+      published: pick(body.filters.published, DISCOVER_PUBLISHED_VALUES, 'all', 'publication period'),
+      performance: pick(body.filters.performance, DISCOVER_PERFORMANCE_VALUES, 'all', 'performance'),
+      sort: pick(body.filters.sort, DISCOVER_SORT_VALUES, 'trending', 'sort'),
+    },
+    notifyEnabled: body.notifyEnabled !== false,
   }
 }
 

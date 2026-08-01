@@ -14,6 +14,7 @@ const iconFor = (type) => {
   if (type === 'watched_trigger') return 'icon-bell-ring'
   if (type === 'discussion_comment') return 'icon-message-circle'
   if (type === 'discussion_reply') return 'icon-reply'
+  if (type === 'saved_search_match') return 'icon-search-check'
   return 'icon-wrench'
 }
 

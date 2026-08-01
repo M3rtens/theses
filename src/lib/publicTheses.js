@@ -26,6 +26,8 @@ export function hydrateProjectedThesis(row) {
     exchange: row.exchange || null,
     body: sanitizeThesisHtml(row.body),
     citations: Array.isArray(row.citations) ? row.citations : [],
+    commentCount: Number(row.comment_count ?? 0),
+    bookmarkCount: Number(row.bookmark_count ?? 0),
     model: row.model && typeof row.model === 'object' ? row.model : null,
     createdAt: row.thesis_created_at || row.created_at,
     closeDate: row.close_date || null,

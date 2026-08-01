@@ -108,7 +108,7 @@ test('guest can page and search Discover, then filter the leaderboard', async ({
   await expect(page.getByRole('link', { name: 'Energy cash-flow inflection' })).toBeVisible()
   await expect(page.getByText('Page 2 of 2')).toBeVisible()
 
-  await page.getByPlaceholder('Search theses by title…').fill('healthcare')
+  await page.getByPlaceholder('Search titles, tickers, companies, analysts, sectors, or thesis text…').fill('healthcare')
   await expect(page.getByRole('link', { name: 'Healthcare platform expansion' })).toBeVisible()
   await expect(page.getByText('1 matching theses', { exact: true })).toBeVisible()
 

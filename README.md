@@ -98,7 +98,8 @@ This is still a prototype rather than a production-ready service. See [Known lim
 - Public Discover feed built from all published theses.
 - Database-wide analyst leaderboard.
 - Server-side Discover and leaderboard pagination with validated query limits and complete result counts.
-- Discover search, sector filtering, and trending/newest/performance sorting across the full public dataset.
+- Discover full-text search across thesis, security, sector, and analyst fields; side, status, publication-period, sector, and performance filters; and trending, newest, return, activity, discussion, and popularity sorting.
+- URL-backed Discover state for shareable searches, plus up to 20 owner-only saved searches with optional in-app alerts when a newly published thesis matches.
 - Leaderboard side, sector, and holding-period filters that recalculate statistics and ranks from every matching thesis in each analyst's complete portfolio.
 - Canonical `/theses/[id]` and `/analysts/[slug]` pages that survive refreshes and can be shared directly.
 - Public analyst profiles backed by explicit profile fields and published-thesis statistics.
@@ -214,6 +215,7 @@ Apply the committed files in `supabase/migrations` in filename order. They are i
 | `thesis_bookmarks` | Created by `202608020001_social_graph.sql`; owner, published thesis, and timestamp |
 | `thesis_comments` | Created by `202608020002_thesis_discussions.sql`; published thesis, author, optional root parent, immutable text, and moderation state |
 | `comment_reports` | Created by `202608020002_thesis_discussions.sql`; private reporter, reason, details, and timestamp |
+| `saved_searches` | Created by `202608020004_saved_discover_searches.sql`; owner, validated Discover filters, sort, notification preference, and timestamps |
 
 The resulting data contract is:
 
@@ -222,13 +224,14 @@ The resulting data contract is:
 - Signed-in users can read only their own drafts; draft writes go through authenticated server routes and use version checks.
 - Signed-in users can manage only their own follows and bookmarks; relationship identities are protected by row-level security.
 - Discussion writes are authenticated server operations; comment text is immutable, removals are retained as moderation records, and reporter identities are never returned publicly.
+- Signed-in users can manage only their own saved Discover searches; matching publication alerts expose no other users' saved-filter data.
 - Thesis creation and all post-publication mutations go through authenticated server routes and service-only database functions.
 - Users can insert or update only the profile whose `id` matches their Auth user ID.
 - Profile join dates are sourced from `auth.users.created_at`; owners cannot rewrite them or self-assign verification.
 - `theses.user_id` and `profiles.id` reference `auth.users.id`.
 - Account deletion cascades from `auth.users` to associated application data.
 
-The base migration creates the tables and owner-scoped policies. The core-integrity migration then adds the version counter and indexes, immutable-field trigger, restricted public view, service-only atomic mutation functions, and final thesis privileges. The automated-lifecycle migration adds private lifecycle jobs, notifications, refresh leases, automatic publication/closing functions, and the 15-minute monitoring contract. Later migrations add versioned cloud drafts, durable profile details, stable analyst slugs, canonical public-route support, the owner-only social graph, discussions, and the explicit public citation projection. The application has temporary offline/compatibility fallbacks, but production should apply the full chain.
+The base migration creates the tables and owner-scoped policies. The core-integrity migration then adds the version counter and indexes, immutable-field trigger, restricted public view, service-only atomic mutation functions, and final thesis privileges. The automated-lifecycle migration adds private lifecycle jobs, notifications, refresh leases, automatic publication/closing functions, and the 15-minute monitoring contract. Later migrations add versioned cloud drafts, durable profile details, stable analyst slugs, canonical public-route support, the owner-only social graph, discussions, the explicit public citation projection, and owner-only saved Discover searches. The application has temporary offline/compatibility fallbacks, but production should apply the full chain.
 
 If the Supabase CLI is configured for your project, migrations can be applied with:
 
@@ -238,7 +241,7 @@ supabase db push
 
 Review the migrations in a staging project and back up production data before applying them. They preserve the JSONB storage contract, but the integrity migration replaces existing policies on the app-owned `profiles` and `theses` tables and changes thesis write privileges.
 
-For an existing environment that already has migrations through `202608010005`, run `202608020001_social_graph.sql`, `202608020002_thesis_discussions.sql`, and `202608020003_thesis_citations.sql` in filename order in the Supabase dashboard’s SQL Editor (or use `supabase db push`) before deploying the matching UI. The citation migration only appends the structured `citations` field to the restricted public view; it does not rewrite existing thesis rows.
+For an existing environment that already has migrations through `202608010005`, run `202608020001_social_graph.sql`, `202608020002_thesis_discussions.sql`, `202608020003_thesis_citations.sql`, and `202608020004_saved_discover_searches.sql` in filename order in the Supabase dashboard's SQL Editor (or use `supabase db push`) before deploying the matching UI. The citation migration appends the structured `citations` field to the restricted public view. The saved-search migration creates the owner-only filter store and matching-publication trigger, and appends aggregate comment and bookmark counts to the public view. Neither migration rewrites existing thesis rows.
 
 ### 5. Enable lifecycle scheduling
 
@@ -361,6 +364,8 @@ supabase/migrations/           Versioned database integrity migrations
 | `/api/theses/[id]/comments` | `GET`, `POST` | List a public thesis discussion or add an authenticated comment/reply. |
 | `/api/comments/[id]` | `DELETE` | Hide a comment as its author or the thesis owner. |
 | `/api/comments/[id]/report` | `POST` | Privately report a visible comment. |
+| `/api/saved-searches` | `GET`, `POST` | List or create owner-only Discover searches. |
+| `/api/saved-searches/[id]` | `PATCH`, `DELETE` | Update notification preferences or delete an owner-only saved search. |
 | `/api/lifecycle-jobs/[id]/retry` | `POST` | Retry an action-required publication or close job. |
 | `/api/internal/lifecycle` | `POST` | Authenticated Cron worker for scheduled publication and closing. |
 | `/api/internal/refresh` | `POST` | Authenticated Cron worker for 15-minute return and trigger refreshes. |
@@ -416,7 +421,7 @@ Before deploying elsewhere, confirm that the host supports the Node.js runtime u
 
 ## Known limitations
 
-- Every migration, including cloud drafts, cloud profiles, public routes, the social graph, discussions, and citations, must be applied to each Supabase environment; committing them does not change a remote database automatically.
+- Every migration, including cloud drafts, cloud profiles, public routes, the social graph, discussions, citations, and saved searches, must be applied to each Supabase environment; committing them does not change a remote database automatically.
 - DOCX import preserves text structure and basic formatting; embedded images, tables, comments, and complex Word layouts are simplified or omitted.
 - Lifecycle automation depends on the separately configured Supabase Cron jobs; applying the migration alone does not start the workers.
 - Notifications are in-app only and are polled once per minute; email and push delivery are not implemented.
