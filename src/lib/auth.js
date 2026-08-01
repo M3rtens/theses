@@ -23,5 +23,8 @@ export async function requireUserContext() {
 }
 
 export function errorStatus(error, fallback = 500) {
-  return error?.status === 401 || error instanceof AuthenticationError ? 401 : fallback
+  if (error instanceof AuthenticationError) return 401
+  return Number.isInteger(error?.status) && error.status >= 400 && error.status <= 599
+    ? error.status
+    : fallback
 }

@@ -1,7 +1,29 @@
 import 'server-only'
 import YahooFinance from 'yahoo-finance2'
+import { createAsyncCache } from './asyncCache.js'
 
-const yf = new YahooFinance({ suppressNotices: ['yahooSurvey', 'ripHistorical'] })
+const PROVIDER_TIMEOUT_MS = 10_000
+
+const timedFetch = (input, init = {}) => {
+  const timeoutSignal = AbortSignal.timeout(PROVIDER_TIMEOUT_MS)
+  const signal = init.signal && typeof AbortSignal.any === 'function'
+    ? AbortSignal.any([init.signal, timeoutSignal])
+    : timeoutSignal
+  return fetch(input, { ...init, signal })
+}
+
+const yf = new YahooFinance({
+  suppressNotices: ['yahooSurvey', 'ripHistorical'],
+  fetch: timedFetch,
+  queue: { concurrency: 8, interval: 20 },
+})
+
+const primaryCache = createAsyncCache({ ttlMs: 60 * 60_000, maxEntries: 500 })
+const thesisCache = createAsyncCache({ ttlMs: 30_000, maxEntries: 150 })
+const financialsCache = createAsyncCache({ ttlMs: 15 * 60_000, maxEntries: 100 })
+const searchCache = createAsyncCache({ ttlMs: 5 * 60_000, maxEntries: 250 })
+const cardsCache = createAsyncCache({ ttlMs: 30_000, maxEntries: 150 })
+const quotesCache = createAsyncCache({ ttlMs: 15_000, maxEntries: 250 })
 
 const CURRENCY_SYMBOL = { USD: '$', EUR: '€', GBP: '£', JPY: '¥' }
 const sym = (c) => CURRENCY_SYMBOL[c] || (c ? `${c} ` : '$')
@@ -124,32 +146,30 @@ const COUNTRY_EXCHANGES = {
 
 // Resolve a symbol to its primary-exchange listing when we can identify one;
 // otherwise return it unchanged. Cached per process to avoid repeat lookups.
-const primaryCache = new Map()
 async function resolvePrimarySymbol(symbol) {
   if (symbol.includes('.')) return symbol // caller already specified an exchange
-  if (primaryCache.has(symbol)) return primaryCache.get(symbol)
-
-  let resolved = symbol
-  try {
-    const profile = await yf.quoteSummary(symbol, { modules: ['assetProfile'] })
-    const codes = COUNTRY_EXCHANGES[profile?.assetProfile?.country]
-    if (codes) {
-      const res = await yf.search(symbol)
-      const base = symbol.toUpperCase()
-      const match = (res?.quotes || []).find(
-        (q) => q.symbol && codes.includes(q.exchange) && q.symbol.toUpperCase().startsWith(base),
-      )
-      if (match) resolved = match.symbol
+  return primaryCache.get(symbol, async () => {
+    let resolved = symbol
+    try {
+      const profile = await yf.quoteSummary(symbol, { modules: ['assetProfile'] })
+      const codes = COUNTRY_EXCHANGES[profile?.assetProfile?.country]
+      if (codes) {
+        const res = await yf.search(symbol)
+        const base = symbol.toUpperCase()
+        const match = (res?.quotes || []).find(
+          (q) => q.symbol && codes.includes(q.exchange) && q.symbol.toUpperCase().startsWith(base),
+        )
+        if (match) resolved = match.symbol
+      }
+    } catch {
+      // Network or parse issue: use the original symbol for this cache window.
     }
-  } catch {
-    // network/parse issue — fall back to the original symbol
-  }
-  primaryCache.set(symbol, resolved)
-  return resolved
+    return resolved
+  })
 }
 
 // Everything the thesis detail view + price chart need for one symbol.
-export async function getThesisData(inputSymbol, from) {
+async function loadThesisData(inputSymbol, from) {
   const symbol = await resolvePrimarySymbol(inputSymbol)
   const period1 = from || '2024-03-14'
 
@@ -234,10 +254,14 @@ export async function getThesisData(inputSymbol, from) {
   }
 }
 
+export function getThesisData(inputSymbol, from) {
+  return thesisCache.get(`${inputSymbol}:${from || ''}`, () => loadThesisData(inputSymbol, from))
+}
+
 // Full income statement, balance sheet, and cash flow — annual and quarterly —
 // for the editor's Financials tab. Values are in the company's reporting
 // currency and native units; the client formats them (millions, EPS, shares).
-export async function getFinancialStatements(inputSymbol) {
+async function loadFinancialStatements(inputSymbol) {
   const symbol = await resolvePrimarySymbol(inputSymbol)
   const now = new Date()
   const annualFrom = `${now.getUTCFullYear() - 6}-01-01`
@@ -266,11 +290,15 @@ export async function getFinancialStatements(inputSymbol) {
   }
 }
 
+export function getFinancialStatements(inputSymbol) {
+  return financialsCache.get(inputSymbol, () => loadFinancialStatements(inputSymbol))
+}
+
 // Free-text security search for the editor's ticker picker. Returns tradeable
 // listings (equities, ETFs, funds) with the fields the UI needs to display and
 // preselect a company. Keeps Yahoo's own exchange-suffixed symbols so a foreign
 // listing can be chosen directly and priced in its native currency.
-export async function searchSecurities(query) {
+async function loadSecuritySearch(query) {
   const q = String(query || '').trim()
   if (q.length < 1) return []
   const TRADEABLE = new Set(['EQUITY', 'ETF', 'MUTUALFUND', 'INDEX'])
@@ -290,6 +318,11 @@ export async function searchSecurities(query) {
       sector: q2.sectorDisp || q2.sector || null,
       industry: q2.industryDisp || q2.industry || null,
     }))
+}
+
+export function searchSecurities(query) {
+  const normalized = String(query || '').trim()
+  return searchCache.get(normalized.toLocaleLowerCase('en-US'), () => loadSecuritySearch(normalized))
 }
 
 // Snapshot a symbol's live price in its native currency, for sealing a thesis's
@@ -317,7 +350,7 @@ export async function lockEntryPrice(inputSymbol) {
 // requested symbol and the publication date; we resolve the primary listing, read
 // the close on (or just after) the entry date, and pair it with the live price so
 // every card renders in the company's own currency — never a US-converted line.
-export async function getCardData(items) {
+async function loadCardData(items) {
   return Promise.all(
     (items || []).map(async ({ symbol: inputSymbol, from }) => {
       try {
@@ -348,9 +381,14 @@ export async function getCardData(items) {
   )
 }
 
+export function getCardData(items) {
+  const normalized = items || []
+  return cardsCache.get(JSON.stringify(normalized), () => loadCardData(normalized))
+}
+
 // Lightweight batch quotes for the watchlist / cards. Each requested symbol is
 // resolved to its primary listing; results stay keyed by the original symbol.
-export async function getQuotes(symbols) {
+async function loadQuotes(symbols) {
   const pairs = await Promise.all(symbols.map(async (s) => [s, await resolvePrimarySymbol(s)]))
   const resolvedBy = Object.fromEntries(pairs)
   const unique = [...new Set(Object.values(resolvedBy))]
@@ -369,4 +407,8 @@ export async function getQuotes(symbols) {
       changePercent: q?.regularMarketChangePercent ?? null,
     }
   })
+}
+
+export function getQuotes(symbols) {
+  return quotesCache.get(symbols.join(','), () => loadQuotes(symbols))
 }

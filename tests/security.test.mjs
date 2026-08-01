@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { readFile } from 'node:fs/promises'
 import test from 'node:test'
 import nextConfig from '../next.config.mjs'
 import {
@@ -13,6 +14,13 @@ import {
 } from '../src/lib/apiValidation.js'
 import { sanitizeThesisHtml } from '../src/lib/html.js'
 import { normalizePublicUrl } from '../src/lib/urls.js'
+import { createAsyncCache } from '../src/lib/asyncCache.js'
+import { hydrateProjectedThesis } from '../src/lib/publicTheses.js'
+import {
+  checkRateLimit,
+  rateLimitFailure,
+  resetRateLimitsForTests,
+} from '../src/lib/rateLimit.js'
 
 const minimalModel = (link) => ({
   filename: 'Model.xlsx',
@@ -148,4 +156,98 @@ test('application responses include the baseline browser security headers', asyn
   assert.equal(headers['X-Content-Type-Options'], 'nosniff')
   assert.equal(headers['X-Frame-Options'], 'DENY')
   assert.equal(headers['Referrer-Policy'], 'strict-origin-when-cross-origin')
+})
+
+test('async provider cache deduplicates in-flight work and never stores failures', async () => {
+  const cache = createAsyncCache({ ttlMs: 60_000, maxEntries: 10 })
+  let loads = 0
+  let resolveLoad
+  const pending = new Promise((resolve) => { resolveLoad = resolve })
+  const first = cache.get('AAPL', async () => {
+    loads += 1
+    return pending
+  })
+  const second = cache.get('AAPL', () => {
+    loads += 1
+    return 'unexpected'
+  })
+  resolveLoad({ price: 100 })
+  assert.deepEqual(await Promise.all([first, second]), [{ price: 100 }, { price: 100 }])
+  assert.equal(loads, 1)
+
+  let attempts = 0
+  await assert.rejects(() => cache.get('failure', async () => {
+    attempts += 1
+    throw new Error('provider down')
+  }), /provider down/)
+  assert.equal(await cache.get('failure', async () => {
+    attempts += 1
+    return 'recovered'
+  }), 'recovered')
+  assert.equal(attempts, 2)
+})
+
+test('public route limiter scopes clients and returns retry guidance', () => {
+  resetRateLimitsForTests()
+  const firstClient = new Request('https://example.test/api/quotes', {
+    headers: { 'x-forwarded-for': '203.0.113.1, 10.0.0.1' },
+  })
+  const secondClient = new Request('https://example.test/api/quotes', {
+    headers: { 'x-forwarded-for': '203.0.113.2' },
+  })
+  const options = { scope: 'quotes', limit: 2, windowMs: 10_000 }
+  assert.equal(checkRateLimit(firstClient, options, 1_000).allowed, true)
+  assert.equal(checkRateLimit(firstClient, options, 1_001).allowed, true)
+  const rejected = checkRateLimit(firstClient, options, 1_002)
+  assert.equal(rejected.allowed, false)
+  assert.deepEqual(rateLimitFailure(rejected), {
+    body: { error: 'too many requests; try again shortly' },
+    init: { status: 429, headers: { 'Retry-After': '10' } },
+  })
+  assert.equal(checkRateLimit(secondClient, options, 1_002).allowed, true)
+  assert.equal(checkRateLimit(firstClient, options, 11_001).allowed, true)
+})
+
+test('public thesis projection maps only explicit fields and sanitizes HTML', () => {
+  const projected = hydrateProjectedThesis({
+    id: 7,
+    owner_id: 'user-1',
+    title: 'Published thesis',
+    ticker: 'AAPL',
+    entry: 100,
+    current_price: 110,
+    return_pct: 10,
+    body: '<p onclick="bad()">Visible</p><script>bad()</script>',
+    author_name: 'Analyst',
+    private_note: 'must not cross the boundary',
+  })
+  assert.equal(projected.ownerId, 'user-1')
+  assert.equal(projected.current, 110)
+  assert.equal(projected.body, '<p>Visible</p>')
+  assert.equal(Object.hasOwn(projected, 'private_note'), false)
+})
+
+test('core integrity migration seals theses and restricts public reads', async () => {
+  const base = await readFile(
+    new URL('../supabase/migrations/202607310001_base_schema.sql', import.meta.url),
+    'utf8',
+  )
+  const migration = await readFile(
+    new URL('../supabase/migrations/202608010001_core_integrity.sql', import.meta.url),
+    'utf8',
+  )
+  assert.match(base, /create table if not exists public\.profiles/i)
+  assert.match(base, /create table if not exists public\.theses/i)
+  assert.match(base, /using \(auth\.uid\(\) = user_id\)/i)
+  assert.match(base, /using \(auth\.uid\(\) = id\)/i)
+  assert.match(migration, /create trigger enforce_thesis_integrity/i)
+  assert.match(migration, /published_thesis_fields_are_immutable/i)
+  assert.match(migration, /from pg_policies/i)
+  assert.match(migration, /create or replace view public\.published_theses/i)
+  assert.match(migration, /revoke all on public\.theses from public, anon/i)
+  assert.match(migration, /revoke insert, update, delete/i)
+  assert.match(migration, /for update;/i)
+  for (const rpc of ['append_thesis_update', 'schedule_thesis_close', 'close_thesis', 'update_thesis_metrics']) {
+    assert.match(migration, new RegExp(`grant execute on function public\\.${rpc}`, 'i'))
+  }
 })

@@ -53,9 +53,11 @@ This is still a prototype rather than a production-ready service. See [Known lim
 - Entry price fetched and sealed by the server; the client cannot supply or backdate it.
 - Primary-exchange resolution and native-currency pricing where Yahoo Finance provides enough metadata.
 - Published thesis body and model treated as read-only in the application.
+- Database trigger enforcement prevents published thesis fields and ownership from being changed after publication.
 - Server-timestamped update log for post-publication commentary.
 - One-way manual close that seals the closing price and side-adjusted return.
 - One-time future close-date selection that cannot be changed after it is stored.
+- Row-locked database functions make updates and lifecycle transitions atomic.
 - No API or interface for deleting an individual published thesis.
 
 ### Invalidation triggers
@@ -71,6 +73,7 @@ This is still a prototype rather than a production-ready service. See [Known lim
 ### Market data and analytics
 
 - Yahoo Finance security search, quotes, price history, and financial statements through `yahoo-finance2`.
+- Per-instance request limits, bounded upstream concurrency, 10-second network aborts, and short-lived response caches protect provider-backed routes.
 - Active-price refresh every 60 seconds while the application is open.
 - Side-adjusted returns for long and short theses.
 - S&P 500 benchmark overlay and alpha calculation on thesis detail charts.
@@ -83,6 +86,7 @@ This is still a prototype rather than a production-ready service. See [Known lim
 - Database-wide analyst leaderboard.
 - Search, sorting, and filtering controls.
 - Public profile identity joined from the `profiles` table.
+- Least-privilege `published_theses` view that exposes an explicit public field projection instead of the underlying thesis JSON document.
 
 ### Spreadsheet modeler
 
@@ -145,7 +149,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
 SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
 ```
 
-`NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` are used by both browser and server Supabase clients. `SUPABASE_SERVICE_ROLE_KEY` is used only on the server for account deletion and the deliberately public, read-only Discover and leaderboard projections. It must never be exposed to browser code or committed to Git.
+`NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` are used by browser and server Supabase clients, including anonymous reads from the restricted public thesis view. `SUPABASE_SERVICE_ROLE_KEY` is used only on the server for account deletion and controlled thesis mutations. It must never be exposed to browser code or committed to Git.
 
 ### 3. Configure Supabase Auth
 
@@ -163,79 +167,33 @@ http://localhost:3000/auth/confirm
 
 If email confirmation is enabled, ensure the confirmation email template passes `token_hash` and `type` to `/auth/confirm`.
 
-### 4. Create the database tables and policies
+### 4. Create and migrate the database
 
-This repository does not currently contain Supabase migrations. The application expects the following table contract:
+Apply the committed files in `supabase/migrations` in filename order. They are idempotent against the documented existing table contract, so the same migration chain supports a new project or upgrades the prototype schema.
 
 | Table | Required columns |
 | --- | --- |
 | `theses` | `id`, `user_id`, `data` (`jsonb`), `status`, `created_at` |
 | `profiles` | `id`, `name`, `handle`, `avatar`, `updated_at` |
 
-The code assumes:
+The resulting data contract is:
 
-- Public community reads go through server route handlers that return limited projections using the service-role client; the browser does not receive the service key.
-- Users can insert and update only their own thesis rows.
+- Public community reads go through server route handlers backed by the anonymous, explicit `published_theses` view; the browser does not receive the service key or opaque `data` document.
+- Signed-in users can read only their own complete thesis rows.
+- Thesis creation and all post-publication mutations go through authenticated server routes and service-only database functions.
 - Users can insert or update only the profile whose `id` matches their Auth user ID.
 - `theses.user_id` and `profiles.id` reference `auth.users.id`.
-- Account deletion cascades from `auth.users` if associated application data should also be removed.
+- Account deletion cascades from `auth.users` to associated application data.
 
-A minimal compatible schema is:
+The base migration creates the tables and owner-scoped policies. The core-integrity migration then adds the version counter and indexes, immutable-field trigger, restricted public view, service-only atomic mutation functions, and final thesis privileges. The application has a temporary compatibility fallback for an unmigrated development database, but production should not rely on it.
 
-```sql
-create table public.profiles (
-  id uuid primary key references auth.users (id) on delete cascade,
-  name text not null default 'Analyst',
-  handle text not null default '',
-  avatar text not null default '',
-  updated_at timestamptz not null default now()
-);
+If the Supabase CLI is configured for your project, migrations can be applied with:
 
-create table public.theses (
-  id bigint generated by default as identity primary key,
-  user_id uuid not null references auth.users (id) on delete cascade,
-  data jsonb not null default '{}'::jsonb,
-  status text not null default 'active',
-  created_at timestamptz not null default now()
-);
-
-alter table public.profiles enable row level security;
-alter table public.theses enable row level security;
-
-create policy "Authenticated users can read profiles"
-  on public.profiles for select
-  to authenticated
-  using (true);
-
-create policy "Users can insert their own profile"
-  on public.profiles for insert
-  to authenticated
-  with check (auth.uid() = id);
-
-create policy "Users can update their own profile"
-  on public.profiles for update
-  to authenticated
-  using (auth.uid() = id)
-  with check (auth.uid() = id);
-
-create policy "Authenticated users can read theses"
-  on public.theses for select
-  to authenticated
-  using (true);
-
-create policy "Users can insert their own theses"
-  on public.theses for insert
-  to authenticated
-  with check (auth.uid() = user_id);
-
-create policy "Users can update their own theses"
-  on public.theses for update
-  to authenticated
-  using (auth.uid() = user_id)
-  with check (auth.uid() = user_id);
+```bash
+supabase db push
 ```
 
-Review and harden these policies for your deployment's privacy requirements.
+Review the migrations in a staging project and back up production data before applying them. They preserve the JSONB storage contract, but the integrity migration replaces existing policies on the app-owned `profiles` and `theses` tables and changes thesis write privileges.
 
 ### 5. Start the application
 
@@ -253,10 +211,12 @@ Open [http://localhost:3000](http://localhost:3000).
 | `npm run build` | Create an optimized production build. |
 | `npm run start` | Start the production server after a build. |
 | `npm run lint` | Run Oxlint. |
+| `npm test` | Run the complete automated test suite. |
+| `npm run test:security` | Run security, validation, caching, and migration-contract tests. |
 | `npm run seed:screenshots` | Add or refresh the marked screenshot/demo dataset in Supabase. |
 | `npm run test:spreadsheet` | Run the spreadsheet utility, formula-engine, and export tests. |
 
-There is currently no full end-to-end test suite; the committed automated tests focus on the spreadsheet subsystem.
+There is currently no full end-to-end test suite. The committed tests cover the spreadsheet subsystem plus security, request validation, public projection, caching, rate limiting, and migration contracts.
 
 ## Screenshot data
 
@@ -302,13 +262,18 @@ src/
   App.jsx                      Client workspace navigation and publishing flow
 
 tests/
+  security.test.mjs            Security, validation, and persistence-contract tests
   spreadsheet.test.mjs         Spreadsheet and workbook export tests
+
+supabase/migrations/           Versioned database integrity migrations
 ```
 
 ### Persistence model
 
 - Published theses are stored as complete objects in `theses.data` (`jsonb`).
-- The relational row stores ownership, creation time, and a mirrored lifecycle status.
+- The relational row stores ownership, creation time, a version counter, and a mirrored lifecycle status.
+- A database trigger seals publication fields; row-locked service functions can change only lifecycle, update-log, market, and trigger-status fields.
+- Anonymous community reads use the explicit `published_theses` projection rather than the complete JSON document.
 - Public profile identity is stored in `profiles`.
 - Drafts are stored per user in browser `localStorage`.
 - The profile bio is also stored in browser `localStorage`.
@@ -371,7 +336,7 @@ Before deploying elsewhere, confirm that the host supports the Node.js runtime u
 
 ## Known limitations
 
-- Supabase migrations are not committed; the database schema must be provisioned separately before using the seed script.
+- The core integrity migration must be applied to each Supabase environment; committing it does not change a remote database automatically.
 - Drafts and profile bios are local to one browser and are not synchronized across devices.
 - Dropping a Word document currently displays import progress messages but does not parse or insert the document.
 - The rich-text editor uses browser `contentEditable` and `document.execCommand`; it is not backed by Tiptap or another structured editor framework.
@@ -379,9 +344,10 @@ Before deploying elsewhere, confirm that the host supports the Node.js runtime u
 - A selected future publication date is saved with a draft, but the publish API currently publishes immediately and does not run a publication scheduler.
 - A future close date can be sealed, but there is no background job that automatically closes the thesis when that date arrives.
 - Market data is dependent on Yahoo Finance availability and is polled rather than streamed.
+- Public request limiting is process-local; configure a shared deployment-edge limit for multi-instance production enforcement.
 - The profile's joined date, location, and verification label are currently static presentation copy.
 - The leaderboard's side and sector filters infer those properties from each analyst's best thesis rather than aggregating full portfolio exposure.
-- Automated tests currently cover the spreadsheet subsystem only.
+- Automated tests do not yet exercise Supabase policies/functions against a disposable database or cover a full browser publish-to-close workflow.
 
 ## License
 

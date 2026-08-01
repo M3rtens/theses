@@ -1,5 +1,5 @@
 import 'server-only'
-import { listTheses, updateThesis } from './thesesStore.js'
+import { listTheses, updateThesisMetrics } from './thesesStore.js'
 import { getFinancialStatements, getCardData } from './yahoo.js'
 import { evaluateTrigger } from './triggers.js'
 
@@ -79,7 +79,7 @@ export async function refreshStoredTriggers() {
       }
     }
 
-    if (Object.keys(patch).length) await updateThesis(t.id, patch)
+    if (Object.keys(patch).length) await updateThesisMetrics(t.id, patch)
   }))
 
   return listTheses()
