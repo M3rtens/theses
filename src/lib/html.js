@@ -24,7 +24,10 @@ export function sanitizeThesisHtml(value) {
     ],
     allowedAttributes: {
       a: ['href', 'target', 'rel'],
-      div: ['class', 'data-thesis-chart-placeholder'],
+      div: [
+        'class', 'data-thesis-chart-placeholder', 'data-thesis-chart-id',
+        'data-thesis-chart-title', 'data-thesis-chart-type',
+      ],
       span: ['class'],
     },
     allowedClasses: {

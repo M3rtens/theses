@@ -1,5 +1,6 @@
 import { sanitizeThesisHtml } from './html.js'
 import { normalizePublicUrl } from './urls.js'
+import { CHART_TYPES, normalizeChartRange, parseChartRange } from './charts.js'
 
 const textEncoder = new TextEncoder()
 const SYMBOL = /^[A-Z0-9^][A-Z0-9.^=/_-]{0,63}$/
@@ -286,16 +287,49 @@ export function cleanWorkbookModel(value) {
 
   if (!Array.isArray(value.sheets)) return cleanSheetModel(value, 0)
   if (value.sheets.length > 25) fail('model has too many sheets')
+  const sheets = value.sheets.map((sheet, index) => {
+    if (!isPlainObject(sheet)) fail(`sheet ${index + 1} must be an object`)
+    return {
+      name: cleanString(sheet.name, { label: `sheet ${index + 1} name`, max: 80, required: true }),
+      ...(sheet.hidden === true ? { hidden: true } : {}),
+      model: cleanSheetModel(sheet.model, index),
+    }
+  })
+  const sheetNames = new Set(sheets.map((sheet) => sheet.name))
+  const charts = value.charts == null ? [] : value.charts
+  if (!Array.isArray(charts)) fail('model charts must be an array')
+  if (charts.length > 20) fail('model has too many charts')
+
   return {
     filename: cleanString(value.filename, { label: 'model filename', max: 255, fallback: 'Thesis model.xlsx' }),
-    sheets: value.sheets.map((sheet, index) => {
-      if (!isPlainObject(sheet)) fail(`sheet ${index + 1} must be an object`)
-      return {
-        name: cleanString(sheet.name, { label: `sheet ${index + 1} name`, max: 80, required: true }),
-        ...(sheet.hidden === true ? { hidden: true } : {}),
-        model: cleanSheetModel(sheet.model, index),
+    sheets,
+    ...(charts.length ? { charts: charts.map((chart, index) => {
+      if (!isPlainObject(chart)) fail(`chart ${index + 1} must be an object`)
+      const id = cleanString(chart.id, { label: `chart ${index + 1} id`, max: 100, required: true })
+      if (!/^[A-Za-z0-9][A-Za-z0-9_-]*$/.test(id)) fail(`chart ${index + 1} id contains unsupported characters`)
+      const sheet = cleanString(chart.sheet, { label: `chart ${index + 1} sheet`, max: 80, required: true })
+      if (!sheetNames.has(sheet)) fail(`chart ${index + 1} references an unknown sheet`)
+      const range = normalizeChartRange(chart.range)
+      if (!range) fail(`chart ${index + 1} has an invalid range`)
+      const bounds = parseChartRange(range)
+      const targetSheet = sheets.find((item) => item.name === sheet)
+      if (bounds.bottom >= targetSheet.model.rows.length || bounds.right > targetSheet.model.headers.length) {
+        fail(`chart ${index + 1} range is outside its sheet`)
       }
-    }),
+      const type = String(chart.type || '').toLowerCase()
+      if (!CHART_TYPES.includes(type)) fail(`chart ${index + 1} has an invalid type`)
+      return {
+        id,
+        title: cleanString(chart.title, { label: `chart ${index + 1} title`, max: 100, required: true }),
+        type,
+        sheet,
+        range,
+        firstRowLabels: chart.firstRowLabels !== false,
+        firstColumnSeries: chart.firstColumnSeries !== false,
+        yAxisLabel: cleanString(chart.yAxisLabel, { label: `chart ${index + 1} y-axis label`, max: 40 }),
+        showLegend: chart.showLegend !== false,
+      }
+    }) } : {}),
   }
 }
 

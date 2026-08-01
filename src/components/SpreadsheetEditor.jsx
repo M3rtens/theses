@@ -447,7 +447,7 @@ function RibbonMenu({ icon, label, title = label, items }) {
   </>
 }
 
-export default function SpreadsheetEditor({ initialModel, onChange }) {
+export default function SpreadsheetEditor({ initialModel, onChange, onSelectionChange }) {
   const [sheets, setSheets] = useState(() => {
     if (initialModel?.sheets) return initialModel.sheets.map((sheet) => ({ ...sheet, model: migrateModel(sheet.model) }))
     return [{ name: 'Sheet1', model: migrateModel(initialModel || INITIAL_MODEL) }]
@@ -623,7 +623,11 @@ export default function SpreadsheetEditor({ initialModel, onChange }) {
     setAddressDraft(row === row2 && col === col2
       ? `${columnLabel(col)}${row + 1}`
       : `${columnLabel(nextRange.left)}${nextRange.top + 1}:${columnLabel(nextRange.right)}${nextRange.bottom + 1}`)
-  }, [])
+    onSelectionChange?.({
+      sheet: sheets[activeSheet]?.name || '',
+      range: `${columnLabel(nextRange.left)}${nextRange.top + 1}:${columnLabel(nextRange.right)}${nextRange.bottom + 1}`,
+    })
+  }, [activeSheet, onSelectionChange, sheets])
 
   const handleGridChange = useCallback((data) => {
     update({ ...toModel(data, columnCount), formats: model.formats || {}, comments: model.comments || {}, merges: model.merges || [], colWidths: model.colWidths || {}, rowHeights: model.rowHeights || {}, view: model.view || INITIAL_MODEL.view })

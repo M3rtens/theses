@@ -40,6 +40,7 @@ const ThesisEditor = forwardRef(function ThesisEditor({
   importingDocument = false,
   documentInputRef,
   showToast,
+  onOpenCharts,
 }, ref) {
   const onChangeRef = useRef(onChange)
   onChangeRef.current = onChange
@@ -141,7 +142,10 @@ const ThesisEditor = forwardRef(function ThesisEditor({
     else if (action === 'bulletList') chain.toggleBulletList().run()
     else if (action === 'orderedList') chain.toggleOrderedList().run()
     else if (action === 'divider') chain.setHorizontalRule().run()
-    else if (action === 'embed') chain.insertContent({ type: 'chartPlaceholder' }).run()
+    else if (action === 'embed') {
+      chain.run()
+      onOpenCharts?.()
+    }
   }
 
   const editLink = () => {
@@ -170,6 +174,25 @@ const ThesisEditor = forwardRef(function ThesisEditor({
       if (!editor.isEmpty) chain.setHorizontalRule()
       chain.insertContent(html).run()
       return true
+    },
+    insertChart: (chart) => {
+      if (!editor || !chart?.id) return false
+      editor.chain().focus('end').insertContent({
+        type: 'chartPlaceholder',
+        attrs: { chartId: chart.id, title: chart.title, chartType: chart.type },
+      }).run()
+      return true
+    },
+    removeChart: (chartId) => {
+      if (!editor || !chartId) return false
+      const ranges = []
+      editor.state.doc.descendants((node, pos) => {
+        if (node.type.name === 'chartPlaceholder' && node.attrs.chartId === chartId) ranges.push({ from: pos, to: pos + node.nodeSize })
+      })
+      const transaction = editor.state.tr
+      ranges.reverse().forEach(({ from, to }) => transaction.delete(from, to))
+      if (ranges.length) editor.view.dispatch(transaction)
+      return Boolean(ranges.length)
     },
   }), [editor])
 
@@ -209,7 +232,7 @@ const ThesisEditor = forwardRef(function ThesisEditor({
         <ToolbarButton label="Numbered list" active={editor?.isActive('orderedList')} onClick={() => editor?.chain().focus().toggleOrderedList().run()}><i className="icon-list-ordered"></i></ToolbarButton>
         <ToolbarButton label="Link" active={editor?.isActive('link')} onClick={editLink}><i className="icon-link"></i></ToolbarButton>
         <ToolbarButton label="Divider" onClick={() => editor?.chain().focus().setHorizontalRule().run()}><i className="icon-minus"></i></ToolbarButton>
-        <ToolbarButton label="Embed chart" onClick={() => editor?.chain().focus().insertContent({ type: 'chartPlaceholder' }).run()}><i className="icon-chart-no-axes-column"></i></ToolbarButton>
+        <ToolbarButton label="Embed chart" onClick={() => onOpenCharts?.()}><i className="icon-chart-no-axes-column"></i></ToolbarButton>
         <button type="button" className="editor-command-hint hidden sm:block ml-auto" onMouseDown={(event) => event.preventDefault()} onClick={() => editor?.chain().focus().insertContent('/').run()}>
           Type <kbd>/</kbd> for commands
         </button>

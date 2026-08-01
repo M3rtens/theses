@@ -12,6 +12,7 @@ import {
 } from '../lib/drafts.js'
 import SpreadsheetEditor from '../components/SpreadsheetEditor.jsx'
 import ThesisEditor from '../components/ThesisEditor.jsx'
+import ChartBuilder from '../components/ChartBuilder.jsx'
 import { latestMetric, formatMetricValue, triggerLabel, evaluateTrigger, comparisonsOf } from '../lib/triggers.js'
 import TriggerComposer from '../components/TriggerComposer.jsx'
 
@@ -121,6 +122,8 @@ export default function Editor({ draft = null, navigate, showToast, onOpenPublis
   const [stmtView, setStmtView] = useState('income')      // income | balance | cashflow
   const [stmtPeriod, setStmtPeriod] = useState('annual')  // annual | quarterly
   const [model, setModel] = useState(draft?.model || null)
+  const [charts, setCharts] = useState(() => Array.isArray(draft?.model?.charts) ? draft.model.charts : [])
+  const [modelSelection, setModelSelection] = useState(null)
   const [useFuturePublication, setUseFuturePublication] = useState(Boolean(draft?.scheduledPublicationDate))
   const [scheduledPublicationDate, setScheduledPublicationDate] = useState(
     draft?.scheduledPublicationDate || draft?.lastScheduledPublicationDate || localDateValue(),
@@ -255,7 +258,7 @@ export default function Editor({ draft = null, navigate, showToast, onOpenPublis
     side,
     body: thesisEditorRef.current?.getHTML() || '',
     triggers: triggers.map(toStoredTrigger),
-    model,
+    model: model || charts.length ? { ...(model || { filename: 'model.xlsx', sheets: [] }), charts } : null,
     scheduledPublicationDate: useFuturePublication ? scheduledPublicationDate : null,
   })
 
@@ -822,11 +825,12 @@ export default function Editor({ draft = null, navigate, showToast, onOpenPublis
             importingDocument={importingDocument}
             documentInputRef={documentInputRef}
             showToast={showToast}
+            onOpenCharts={() => setActiveTab('charts')}
           />
         </div>
 
         <div className={tabHidden('model')}>
-          <SpreadsheetEditor initialModel={model || undefined} onChange={(nextModel) => { setModel(nextModel); markDirty() }} />
+          <SpreadsheetEditor initialModel={model || undefined} onSelectionChange={setModelSelection} onChange={(nextModel) => { setModel({ ...nextModel, charts }); markDirty() }} />
           {showLegacyModel && <>
           <div className="border rounded-md overflow-hidden" style={{ borderColor: 'var(--border)' }}>
             <div className="px-4 py-2.5 border-b flex items-center justify-between" style={{ borderColor: 'var(--border)', background: 'var(--bg-warm)' }}>
@@ -946,10 +950,24 @@ export default function Editor({ draft = null, navigate, showToast, onOpenPublis
         </div>
 
         <div className={tabHidden('charts')}>
-          <div className="p-10 border border-dashed rounded-md text-center" style={{ borderColor: 'var(--border)', background: 'var(--bg-warm)' }}>
-            <i className="icon-chart-no-axes-column text-xl" style={{ color: 'var(--faint)' }}></i>
-            <p className="text-sm mt-2" style={{ color: 'var(--muted)' }}>No charts yet.</p>
-          </div>
+          <ChartBuilder
+            model={model}
+            charts={charts}
+            selectedRange={modelSelection}
+            showToast={showToast}
+            onChange={(nextCharts, removedId) => {
+              setCharts(nextCharts)
+              setModel((current) => current ? { ...current, charts: nextCharts } : current)
+              if (removedId) thesisEditorRef.current?.removeChart(removedId)
+              markDirty()
+            }}
+            onInsert={(chart) => {
+              if (thesisEditorRef.current?.insertChart(chart)) {
+                setActiveTab('thesis')
+                showToast('Chart inserted into the thesis.')
+              }
+            }}
+          />
         </div>
       </div>
 

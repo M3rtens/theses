@@ -14,6 +14,7 @@ import {
   syncWorkbookFormulaEngine,
 } from '../src/lib/spreadsheetEngine.js'
 import { FUNCTION_NAMES } from '../src/lib/spreadsheetFunctions.js'
+import { buildModelChartData, normalizeChartRange, parseChartRange } from '../src/lib/charts.js'
 
 const model = (grid) => ({
   headers: Array(Math.max(grid[0]?.length - 1, 0)).fill(''),
@@ -66,6 +67,33 @@ test('one formula engine calculates and rewrites cross-sheet references', () => 
   syncWorkbookFormulaEngine(engine, replacement)
   assert.equal(engine.getCellValue({ sheet: engine.getSheetId('Forecast'), row: 0, col: 0 }), 12)
   engine.destroy()
+})
+
+test('model charts normalize ranges and evaluate workbook formulas', () => {
+  const workbook = {
+    filename: 'Model.xlsx',
+    sheets: [{
+      name: 'Forecast',
+      model: model([
+        ['Metric', '2026', '2027', '2028'],
+        ['Revenue', '100', '=B2*1.2', '=C2*1.2'],
+        ['Margin', '0.20', '0.24', '0.27'],
+      ]),
+    }],
+  }
+  const chart = {
+    sheet: 'Forecast',
+    range: 'd3:a1',
+    type: 'line',
+    firstRowLabels: true,
+    firstColumnSeries: true,
+  }
+  assert.deepEqual(parseChartRange(chart.range), { top: 0, bottom: 2, left: 0, right: 3 })
+  assert.equal(normalizeChartRange(chart.range), 'A1:D3')
+  const data = buildModelChartData(workbook, chart)
+  assert.deepEqual(data.categories, ['2026', '2027', '2028'])
+  assert.deepEqual(data.series[0], { name: 'Revenue', values: [100, 120, 144] })
+  assert.deepEqual(data.series[1], { name: 'Margin', values: [0.2, 0.24, 0.27] })
 })
 
 test('xlsx export keeps formulas, numeric values, styles, dimensions, merges, and hidden sheets', () => {

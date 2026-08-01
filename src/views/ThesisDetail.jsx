@@ -5,6 +5,7 @@ import { useUser } from '../components/UserProvider.jsx'
 import PriceChart from '../components/PriceChart.jsx'
 import SpreadsheetViewer from '../components/SpreadsheetViewer.jsx'
 import ShareControls from '../components/ShareControls.jsx'
+import ThesisBody from '../components/ThesisBody.jsx'
 import { fmtPrice } from '../lib/format.js'
 import { modelHasContent } from '../lib/model.js'
 import { evaluateTrigger, latestMetric, formatMetricValue } from '../lib/triggers.js'
@@ -507,7 +508,7 @@ export default function ThesisDetail({ navigate, thesis }) {
         <div className="grid grid-cols-1 xl:grid-cols-4 gap-8">
           <div className="xl:col-span-3 min-w-0">
             {base.body
-              ? <article className="editor-content" style={{ minHeight: 'auto' }} dangerouslySetInnerHTML={{ __html: base.body }} />
+              ? <ThesisBody html={base.body} model={base.model} />
               : <article className="font-serif text-[17px] leading-[1.75]" style={{ color: 'var(--ink-soft)' }}>
                   <p>The full thesis text isn’t available for this entry.</p>
                 </article>}

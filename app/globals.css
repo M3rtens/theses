@@ -16,6 +16,12 @@
   --bear-soft: #F0E5E2;
   --warn: #9A6B1F;
   --warn-soft: #F4ECD9;
+  --viz-series-1: #315F72;
+  --viz-series-2: #9B5F3D;
+  --viz-series-3: #66723F;
+  --viz-series-4: #755B82;
+  --viz-series-5: #A17624;
+  --viz-series-6: #4F7771;
 }
 
 * { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
@@ -187,6 +193,43 @@ body.mobile-menu-open { overflow: hidden; }
 .editor-content .thesis-chart-placeholder { border-color: var(--border); background: var(--bg-warm); font-family: Inter, system-ui, sans-serif; cursor: default; }
 .editor-content .thesis-chart-placeholder > :first-child { color: var(--muted); }
 .editor-content .thesis-chart-placeholder > :last-child { color: var(--ink-soft); }
+
+.chart-builder { display: grid; grid-template-columns: minmax(160px, 220px) minmax(0, 1fr); min-height: 520px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); overflow: hidden; }
+.chart-builder-list { border-right: 1px solid var(--border); background: var(--bg-warm); padding: 8px; }
+.chart-builder-list button { display: grid; width: 100%; grid-template-columns: 18px minmax(0, 1fr); gap: 2px 6px; align-items: center; border: 0; border-radius: 4px; background: transparent; padding: 9px 8px; color: var(--ink-soft); cursor: pointer; font-size: 12px; text-align: left; }
+.chart-builder-list button:hover, .chart-builder-list button.active { background: var(--surface); color: var(--ink); }
+.chart-builder-list button span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chart-builder-list button small { grid-column: 2; color: var(--muted); font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 9px; }
+.chart-builder-main { min-width: 0; padding: 18px; }
+.chart-builder-fields { display: grid; grid-template-columns: minmax(160px, 2fr) repeat(3, minmax(120px, 1fr)); gap: 10px; }
+.chart-builder-fields label { color: var(--muted); font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; }
+.chart-builder-fields label:first-child { grid-column: span 2; }
+.chart-builder-fields input, .chart-builder-fields select { display: block; width: 100%; min-width: 0; margin-top: 5px; border: 1px solid var(--border-strong); border-radius: 4px; background: var(--surface); padding: 7px 8px; color: var(--ink); font-family: Inter, system-ui, sans-serif; font-size: 12px; text-transform: none; letter-spacing: normal; outline: none; }
+.chart-builder-fields input:focus, .chart-builder-fields select:focus { border-color: var(--ink); }
+.chart-builder-options { display: flex; flex-wrap: wrap; gap: 10px 18px; padding: 14px 0; color: var(--ink-soft); font-size: 11px; }
+.chart-builder-options label { display: inline-flex; align-items: center; gap: 6px; }
+.chart-range-selection { border: 0; background: transparent; padding: 0; color: var(--bull); cursor: pointer; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 10px; }
+.chart-range-selection:hover { text-decoration: underline; }
+.chart-builder-preview { border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 18px 0; }
+.chart-builder-actions { display: flex; justify-content: flex-end; gap: 8px; padding-top: 14px; }
+.chart-builder-actions button { border: 1px solid var(--ink); border-radius: 4px; background: var(--ink); padding: 7px 12px; color: var(--surface); cursor: pointer; font-size: 12px; }
+.chart-builder-actions button.secondary { background: transparent; color: var(--ink); }
+.chart-builder-actions button.danger { margin-right: auto; border-color: var(--bear); background: transparent; color: var(--bear); }
+.model-chart { width: 100%; margin: 0; color: var(--ink); font-family: Inter, system-ui, sans-serif; }
+.model-chart figcaption { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 0 4px 8px; }
+.model-chart figcaption span { font-family: Fraunces, Georgia, serif; font-size: 17px; font-weight: 500; }
+.model-chart figcaption small { color: var(--muted); font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 9px; }
+.model-chart svg { display: block; width: 100%; height: auto; overflow: visible; }
+.model-chart-grid { stroke: var(--border); stroke-width: 1; }
+.model-chart-axis { stroke: var(--border-strong); stroke-width: 1.25; }
+.model-chart-line { fill: none; stroke-width: 2.25; stroke-linecap: round; stroke-linejoin: round; }
+.model-chart-axis-label { fill: var(--muted); font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 10px; }
+.model-chart-axis-title { fill: var(--ink-soft); font-size: 10px; }
+.model-chart-legend { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 16px; color: var(--ink-soft); font-size: 10px; }
+.model-chart-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.model-chart-legend i { width: 9px; height: 9px; border-radius: 50%; }
+.model-chart-empty { display: grid; min-height: 280px; place-items: center; color: var(--muted); font-size: 12px; text-align: center; }
+.editor-content .model-chart { margin-block: 22px; }
 .editor-content .ProseMirror-selectednode { outline: 2px solid var(--ink-soft); outline-offset: 2px; }
 
 .toolbar-btn {
@@ -515,6 +558,18 @@ button.excel-formula-icon:hover, button.excel-formula-icon:focus-visible { backg
   .publication-calendar { width: min(280px, calc(100vw - 32px)); }
   .price-chart-container { height: 270px; }
   .tooltip { max-width: calc(100vw - 24px); white-space: normal; }
+  .chart-builder { grid-template-columns: 1fr; }
+  .chart-builder-list { display: flex; border-right: 0; border-bottom: 1px solid var(--border); overflow-x: auto; }
+  .chart-builder-list button { min-width: 145px; }
+  .chart-builder-main { padding: 14px; }
+  .chart-builder-fields { grid-template-columns: 1fr 1fr; }
+  .chart-builder-fields label:first-child { grid-column: span 2; }
+  .model-chart figcaption { align-items: flex-start; flex-direction: column; }
+}
+
+@media (max-width: 480px) {
+  .chart-builder-fields { grid-template-columns: 1fr; }
+  .chart-builder-fields label:first-child { grid-column: auto; }
 }
 
 @media (prefers-reduced-motion: reduce) {

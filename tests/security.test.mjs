@@ -102,6 +102,12 @@ test('structured editor round-trips existing thesis HTML and legacy chart placeh
   const sanitized = sanitizeThesisHtml(html)
   assert.match(sanitized, /data-thesis-chart-placeholder="true"/)
   assert.equal(generateJSON(sanitized, extensions).content.at(-1).type, 'chartPlaceholder')
+
+  const linked = '<div class="thesis-chart-placeholder" data-thesis-chart-placeholder="true" data-thesis-chart-id="chart-revenue" data-thesis-chart-title="Revenue" data-thesis-chart-type="bar">Embedded Chart</div>'
+  const linkedDocument = generateJSON(linked, extensions)
+  assert.equal(linkedDocument.content[0].attrs.chartId, 'chart-revenue')
+  assert.equal(linkedDocument.content[0].attrs.chartType, 'bar')
+  assert.match(sanitizeThesisHtml(generateHTML(linkedDocument, extensions)), /data-thesis-chart-id="chart-revenue"/)
 })
 
 test('legacy editor DOM mutation commands have been removed', async () => {
@@ -138,6 +144,35 @@ test('published workbook validation normalizes safe links and rejects unsafe lin
     () => cleanWorkbookModel(minimalModel('javascript:alert(1)')),
     /unsafe hyperlink/,
   )
+})
+
+test('published workbook validation seals bounded chart definitions', () => {
+  const input = minimalModel()
+  input.charts = [{
+    id: 'chart-revenue',
+    title: 'Revenue trajectory',
+    type: 'line',
+    sheet: 'Model',
+    range: 'b1:a1',
+    firstRowLabels: false,
+    firstColumnSeries: true,
+    yAxisLabel: 'AUD m',
+    showLegend: false,
+  }]
+  const clean = cleanWorkbookModel(input)
+  assert.deepEqual(clean.charts[0], {
+    id: 'chart-revenue',
+    title: 'Revenue trajectory',
+    type: 'line',
+    sheet: 'Model',
+    range: 'A1:B1',
+    firstRowLabels: false,
+    firstColumnSeries: true,
+    yAxisLabel: 'AUD m',
+    showLegend: false,
+  })
+  assert.throws(() => cleanWorkbookModel({ ...input, charts: [{ ...input.charts[0], sheet: 'Missing' }] }), /unknown sheet/)
+  assert.throws(() => cleanWorkbookModel({ ...input, charts: [{ ...input.charts[0], range: 'A1:ZZZ999' }] }), /invalid range|outside its sheet/)
 })
 
 test('DOCX imports enforce file boundaries and sanitize converted HTML', async () => {

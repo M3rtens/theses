@@ -10,6 +10,14 @@ export const ChartPlaceholder = Node.create({
   selectable: true,
   draggable: false,
 
+  addAttributes() {
+    return {
+      chartId: { default: null, parseHTML: (element) => element.getAttribute('data-thesis-chart-id') },
+      title: { default: 'Embedded Chart', parseHTML: (element) => element.getAttribute('data-thesis-chart-title') || element.querySelector('.font-medium')?.textContent || 'Embedded Chart' },
+      chartType: { default: 'line', parseHTML: (element) => element.getAttribute('data-thesis-chart-type') || 'line' },
+    }
+  },
+
   parseHTML() {
     return [{
       tag: 'div[data-thesis-chart-placeholder], div.my-4.p-4.border.rounded',
@@ -22,17 +30,21 @@ export const ChartPlaceholder = Node.create({
     }]
   },
 
-  renderHTML() {
+  renderHTML({ node }) {
+    const { chartId, title, chartType } = node.attrs
     return [
       'div',
       {
         class: 'thesis-chart-placeholder my-4 p-4 border rounded',
         'data-thesis-chart-placeholder': 'true',
+        ...(chartId ? { 'data-thesis-chart-id': chartId } : {}),
+        'data-thesis-chart-title': title,
+        'data-thesis-chart-type': chartType,
         contenteditable: 'false',
       },
-      ['div', { class: 'text-[10px] font-mono uppercase tracking-wider' }, 'Embedded Chart'],
-      ['div', { class: 'text-sm font-medium mt-1' }, 'Revenue & Margin Trajectory'],
-      ['div', { class: 'text-xs mt-1' }, 'Linked to model · auto-updates'],
+      ['div', { class: 'text-[10px] font-mono uppercase tracking-wider' }, chartId ? `${chartType} chart` : 'Embedded Chart'],
+      ['div', { class: 'text-sm font-medium mt-1' }, title],
+      ['div', { class: 'text-xs mt-1' }, chartId ? 'Linked to sealed model data' : 'Choose a chart from the Charts tab'],
     ]
   },
 })
