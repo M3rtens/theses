@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import Link from 'next/link'
 import { useDiscoverFeed } from '../lib/useDiscoverFeed.js'
 import { SECTORS } from '../lib/sectors.js'
 
@@ -113,7 +114,9 @@ export default function Discover({ navigate }) {
                       {initials}
                     </div>
                     <div>
-                      <div className="text-xs font-medium">{t.author}</div>
+                      {t.authorSlug
+                        ? <Link href={`/analysts/${t.authorSlug}`} onClick={(event) => event.stopPropagation()} className="text-xs font-medium hover:underline">{t.author}</Link>
+                        : <div className="text-xs font-medium">{t.author}</div>}
                       <div className="text-[10px] font-mono" style={{ color: 'var(--muted)' }}>{t.handle ? `${t.handle} · ` : ''}{t.date}</div>
                     </div>
                   </div>
@@ -128,14 +131,16 @@ export default function Discover({ navigate }) {
                   <span className="text-[10px] font-mono" style={{ color: 'var(--muted)' }}>since publish</span>
                 </div>
 
-                <h3 className="font-serif text-xl font-medium mb-2 leading-snug">{t.title}</h3>
+                <h3 className="font-serif text-xl font-medium mb-2 leading-snug">
+                  <Link href={`/theses/${t.id}`} onClick={(event) => event.stopPropagation()}>{t.title}</Link>
+                </h3>
                 <p className="text-sm leading-relaxed mb-5 flex-1" style={{ color: 'var(--ink-soft)' }}>{t.snippet}</p>
 
                 <div className="pt-4 border-t flex items-center justify-between text-xs" style={{ borderColor: 'var(--border)' }}>
                   <div className="flex items-center gap-3" style={{ color: 'var(--muted)' }}>
                     <span className="flex items-center gap-1"><i className="icon-message-square text-xs"></i> {t.updates || 0}</span>
                   </div>
-                  <span className="font-medium">Read thesis →</span>
+                  <Link href={`/theses/${t.id}`} onClick={(event) => event.stopPropagation()} className="font-medium">Read thesis →</Link>
                 </div>
               </div>
             )

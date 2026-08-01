@@ -9,6 +9,7 @@ export const DEFAULT_PROFILE = {
   location: '',
   joinedAt: null,
   verified: false,
+  slug: '',
   updatedAt: null,
   savedAt: null,
   dirty: false,

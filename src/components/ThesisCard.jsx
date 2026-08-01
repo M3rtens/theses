@@ -1,4 +1,5 @@
 import Sparkline from './Sparkline.jsx'
+import Link from 'next/link'
 import { fmtPrice } from '../lib/format.js'
 
 export default function ThesisCard({ thesis: t, variant = 'dashboard', onOpen, live }) {
@@ -18,6 +19,7 @@ export default function ThesisCard({ thesis: t, variant = 'dashboard', onOpen, l
   const sign = ret >= 0 ? '+' : '−'
   const sideClass = t.side === 'bull' ? 'side-bull' : 'side-bear'
   const sideLabel = t.side === 'bull' ? 'BULL' : 'BEAR'
+  const publicPath = Number.isSafeInteger(Number(t.id)) && Number(t.id) > 0 ? `/theses/${t.id}` : null
 
   const statusBadge = variant === 'profile'
     ? (t.status === 'closed'
@@ -40,7 +42,11 @@ export default function ThesisCard({ thesis: t, variant = 'dashboard', onOpen, l
             <span className="text-[10px] font-mono" style={{ color: 'var(--muted)' }}>{t.sector}</span>
             {statusBadge}
           </div>
-          <div className="text-sm font-medium truncate">{t.title}</div>
+          <div className="text-sm font-medium truncate">
+            {publicPath
+              ? <Link href={publicPath} onClick={(event) => event.stopPropagation()}>{t.title}</Link>
+              : t.title}
+          </div>
           {variant === 'profile' && (
             <div className="text-[11px] font-mono mt-0.5" style={{ color: 'var(--muted)' }}>Published {t.publishDate} · {t.updates} updates</div>
           )}

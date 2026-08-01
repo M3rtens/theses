@@ -43,6 +43,7 @@ export async function GET() {
         name: identity.author || 'Analyst',
         handle: identity.handle || '',
         avatar: identity.authorAvatar || (identity.author ? identity.author.slice(0, 2).toUpperCase() : '—'),
+        slug: identity.authorSlug || '',
         isYou: uid === user?.id,
         ...selfStats(theses, retOf),
       }

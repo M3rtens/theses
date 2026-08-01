@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { useUser } from './components/UserProvider.jsx'
 import { useData } from './components/DataProvider.jsx'
 import { deleteDraft } from './lib/drafts.js'
@@ -19,17 +19,23 @@ import Drafts from './views/Drafts.jsx'
 import Triggers from './views/Triggers.jsx'
 import Discover from './views/Discover.jsx'
 import Notifications from './views/Notifications.jsx'
+import AnalystProfile from './views/AnalystProfile.jsx'
 import { fmtPrice } from './lib/format.js'
 
 const PROTECTED_VIEWS = new Set(['dashboard', 'editor', 'profile', 'mytheses', 'drafts', 'triggers', 'notifications'])
 
-export default function App() {
+export default function App({ initialView = null, initialThesis = null, initialAnalyst = null }) {
   const user = useUser()
   const router = useRouter()
+  const pathname = usePathname()
   const { refresh } = useData()
-  const [view, setView] = useState(() => (user ? 'dashboard' : 'discover'))
+  const allowedInitialView = initialView && (!PROTECTED_VIEWS.has(initialView) || user)
+    ? initialView
+    : (user ? 'dashboard' : 'discover')
+  const [view, setView] = useState(allowedInitialView)
   const [editorDraft, setEditorDraft] = useState(null)
-  const [activeThesis, setActiveThesis] = useState(null)
+  const [activeThesis, setActiveThesis] = useState(initialThesis)
+  const [activeAnalyst, setActiveAnalyst] = useState(initialAnalyst)
   const [toast, setToast] = useState('')
   const [publishOpen, setPublishOpen] = useState(false)
   const [pendingDraft, setPendingDraft] = useState(null)
@@ -46,11 +52,34 @@ export default function App() {
       router.push('/sign-in')
       return
     }
+    if (next === 'thesis' && payload?.id) {
+      router.push(`/theses/${payload.id}`)
+      return
+    }
+    if (next === 'analyst' && payload?.slug) {
+      router.push(`/analysts/${payload.slug}`)
+      return
+    }
     setEditorDraft(next === 'editor' ? payload : null)
-    if (next === 'thesis') setActiveThesis(payload)
     setView(next)
     window.scrollTo(0, 0)
-  }, [router, user])
+    if (pathname !== '/') router.push(`/?view=${encodeURIComponent(next)}`)
+    else window.history.replaceState(null, '', `/?view=${encodeURIComponent(next)}`)
+  }, [pathname, router, user])
+
+  // Server-backed route changes can preserve the client shell. Keep its local
+  // view selection aligned with the new canonical route props.
+  useEffect(() => {
+    if (!initialView) return
+    if (!user && PROTECTED_VIEWS.has(initialView)) {
+      setView('discover')
+      return
+    }
+    setView(initialView)
+    setActiveThesis(initialThesis)
+    setActiveAnalyst(initialAnalyst)
+    window.scrollTo(0, 0)
+  }, [initialView, initialThesis, initialAnalyst, user])
 
   // A sign-out refresh can preserve client component state. Move any protected
   // view back to the public feed as soon as the session disappears.
@@ -167,6 +196,7 @@ export default function App() {
       case 'editor': return <Editor key={editorDraft?.id || 'new'} draft={editorDraft} navigate={navigate} showToast={showToast} onOpenPublish={openPublish} />
       case 'thesis': return <ThesisDetail navigate={navigate} thesis={activeThesis} />
       case 'leaderboard': return <Leaderboard />
+      case 'analyst': return <AnalystProfile analyst={activeAnalyst} navigate={navigate} />
       case 'profile': return <Profile navigate={navigate} />
       case 'mytheses': return <MyTheses navigate={navigate} />
       case 'drafts': return <Drafts navigate={navigate} />

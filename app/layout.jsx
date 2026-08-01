@@ -1,7 +1,23 @@
 import './globals.css'
 
+const deploymentHost = process.env.VERCEL_PROJECT_PRODUCTION_URL || process.env.VERCEL_URL
+const metadataOrigin = process.env.NEXT_PUBLIC_SITE_URL
+  || (deploymentHost ? `https://${deploymentHost}` : 'http://localhost:3000')
+
 export const metadata = {
-  title: 'Theses',
+  metadataBase: new URL(metadataOrigin),
+  title: {
+    default: 'Theses',
+    template: '%s · Theses',
+  },
+  description: 'Publish investment theses with sealed entry prices and track what happens.',
+  openGraph: {
+    siteName: 'Theses',
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary_large_image',
+  },
   icons: {
     icon: '/favicon.svg',
   },

@@ -4,7 +4,7 @@ import { createAdminClient } from './supabase/admin.js'
 import { deriveIdentity } from './user.js'
 
 const migrationMissing = (error) => ['42P01', '42703', 'PGRST204', 'PGRST205'].includes(error?.code)
-  || /relation .+profiles.+ does not exist|column .+(bio|location|joined_at|verified).+ does not exist|schema cache.+profiles/i.test(error?.message || '')
+  || /relation .+profiles.+ does not exist|column .+(bio|location|joined_at|verified|slug).+ does not exist|schema cache.+profiles/i.test(error?.message || '')
 
 function mapProfileError(error) {
   const mapped = new Error(migrationMissing(error)
@@ -20,6 +20,7 @@ function hydrateProfile(row, user) {
     location: row?.location || '',
     joinedAt: row?.joined_at || user?.created_at || null,
     verified: row?.verified === true,
+    slug: row?.slug || '',
     updatedAt: row?.updated_at || null,
   }
 }
@@ -29,7 +30,7 @@ export async function getCloudProfile() {
   const admin = createAdminClient()
   const { data, error } = await admin
     .from('profiles')
-    .select('id, bio, location, joined_at, verified, updated_at')
+    .select('id, bio, location, joined_at, verified, slug, updated_at')
     .eq('id', user.id)
     .maybeSingle()
   if (error) throw mapProfileError(error)
@@ -50,7 +51,7 @@ export async function saveCloudProfile(profile) {
       bio: profile.bio,
       location: profile.location,
     }, { onConflict: 'id' })
-    .select('id, bio, location, joined_at, verified, updated_at')
+    .select('id, bio, location, joined_at, verified, slug, updated_at')
     .single()
   if (error) throw mapProfileError(error)
   return hydrateProfile(data, user)

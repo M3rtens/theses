@@ -92,7 +92,10 @@ This is still a prototype rather than a production-ready service. See [Known lim
 - Public Discover feed built from all published theses.
 - Database-wide analyst leaderboard.
 - Search, sorting, and filtering controls.
-- Public profile identity joined from the `profiles` table.
+- Canonical `/theses/[id]` and `/analysts/[slug]` pages that survive refreshes and can be shared directly.
+- Public analyst profiles backed by explicit profile fields and published-thesis statistics.
+- Thesis-specific and analyst-specific Open Graph images, metadata, canonical links, native sharing, and copy-link controls.
+- Public profile identity and stable analyst slug joined from the `profiles` table.
 - Owner-only lifecycle notifications with unread counts and retry actions for failed automation.
 - Least-privilege `published_theses` view that exposes an explicit public field projection instead of the underlying thesis JSON document.
 
@@ -156,9 +159,11 @@ NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
 SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
 LIFECYCLE_WORKER_SECRET=replace-with-a-long-random-secret
+# Optional outside Vercel; used as the canonical metadata origin.
+NEXT_PUBLIC_SITE_URL=http://localhost:3000
 ```
 
-`NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` are used by browser and server Supabase clients, including anonymous reads from the restricted public thesis view. `SUPABASE_SERVICE_ROLE_KEY` is used only on the server for account deletion and controlled thesis, lifecycle, and draft mutations. `LIFECYCLE_WORKER_SECRET` authenticates calls from Supabase Cron to the two internal worker routes and should be a cryptographically random value of at least 16 characters. Neither secret may be exposed to browser code or committed to Git.
+`NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` are used by browser and server Supabase clients, including anonymous reads from the restricted public thesis view. `SUPABASE_SERVICE_ROLE_KEY` is used only on the server for account deletion, controlled mutations, and explicit public analyst projections. `LIFECYCLE_WORKER_SECRET` authenticates calls from Supabase Cron to the two internal worker routes and should be a cryptographically random value of at least 16 characters. Neither secret may be exposed to browser code or committed to Git.
 
 ### 3. Configure Supabase Auth
 
@@ -183,7 +188,7 @@ Apply the committed files in `supabase/migrations` in filename order. They are i
 | Table | Required columns |
 | --- | --- |
 | `theses` | `id`, `user_id`, `data` (`jsonb`), `status`, `created_at` |
-| `profiles` | `id`, identity fields, `bio`, `location`, `joined_at`, `verified`, `updated_at` |
+| `profiles` | `id`, identity fields, `bio`, `location`, `joined_at`, `verified`, stable `slug`, `updated_at` |
 | `drafts` | Created by `202608010003_cloud_drafts.sql`; owner, JSONB content, local identity, version, and timestamps |
 
 The resulting data contract is:
@@ -197,7 +202,7 @@ The resulting data contract is:
 - `theses.user_id` and `profiles.id` reference `auth.users.id`.
 - Account deletion cascades from `auth.users` to associated application data.
 
-The base migration creates the tables and owner-scoped policies. The core-integrity migration then adds the version counter and indexes, immutable-field trigger, restricted public view, service-only atomic mutation functions, and final thesis privileges. The automated-lifecycle migration adds private lifecycle jobs, notifications, refresh leases, automatic publication/closing functions, and the 15-minute monitoring contract. The final two migrations add versioned cloud drafts and durable profile details. The application has temporary offline/compatibility fallbacks, but production should apply the full chain.
+The base migration creates the tables and owner-scoped policies. The core-integrity migration then adds the version counter and indexes, immutable-field trigger, restricted public view, service-only atomic mutation functions, and final thesis privileges. The automated-lifecycle migration adds private lifecycle jobs, notifications, refresh leases, automatic publication/closing functions, and the 15-minute monitoring contract. The final migrations add versioned cloud drafts, durable profile details, stable analyst slugs, and canonical public-route support. The application has temporary offline/compatibility fallbacks, but production should apply the full chain.
 
 If the Supabase CLI is configured for your project, migrations can be applied with:
 
@@ -207,7 +212,7 @@ supabase db push
 
 Review the migrations in a staging project and back up production data before applying them. They preserve the JSONB storage contract, but the integrity migration replaces existing policies on the app-owned `profiles` and `theses` tables and changes thesis write privileges.
 
-For an existing environment that already has the lifecycle migration, run `202608010003_cloud_drafts.sql` followed by `202608010004_cloud_profiles.sql` in the Supabase dashboard’s SQL Editor (or use `supabase db push`). Until they are applied, edits remain safe in the current browser but cannot sync across devices.
+For an existing environment that already has the lifecycle migration, run migrations `202608010003` through `202608010005` in filename order in the Supabase dashboard’s SQL Editor (or use `supabase db push`). Until they are applied, draft/profile edits remain safe in the current browser, while analyst URLs require the public-routes migration.
 
 ### 5. Enable lifecycle scheduling
 
@@ -273,12 +278,14 @@ The root App Router page resolves the session on the server but renders for both
 
 ```text
 app/
+  analysts/[slug]/              Public analyst page and dynamic social image
   api/                         Next.js route handlers
   auth/                        OAuth and email-confirmation callbacks
   globals.css                  Application and spreadsheet styling
   layout.jsx                   Root metadata and external font/icon assets
   page.jsx                     Guest-or-user session bootstrap
   sign-in/page.jsx             Dedicated authentication page
+  theses/[id]/                 Public thesis page and dynamic social image
 
 src/
   components/                  Shared UI and spreadsheet components
@@ -302,7 +309,7 @@ supabase/migrations/           Versioned database integrity migrations
 - Notifications are owner-scoped rows with idempotent event keys and read timestamps.
 - A database trigger seals publication fields; row-locked service functions can change only lifecycle, update-log, market, and trigger-status fields.
 - Anonymous community reads use the explicit `published_theses` projection rather than the complete JSON document.
-- Profile identity, bio, optional location, Auth-backed join date, and server-managed verification are stored in `profiles`; the browser retains an owner-scoped offline copy of editable details.
+- Profile identity, bio, optional location, Auth-backed join date, server-managed verification, and immutable public slug are stored in `profiles`; the browser retains an owner-scoped offline copy of editable details.
 - Drafts are stored in owner-only `drafts` rows with a monotonically increasing version. The browser keeps an offline cache, imports legacy local drafts after a successful cloud connection, and creates a separate conflict copy when versions diverge.
 - Shared client datasets are cached in `DataProvider`.
 
@@ -347,9 +354,10 @@ NEXT_PUBLIC_SUPABASE_URL
 NEXT_PUBLIC_SUPABASE_ANON_KEY
 SUPABASE_SERVICE_ROLE_KEY
 LIFECYCLE_WORKER_SECRET
+NEXT_PUBLIC_SITE_URL
 ```
 
-`SUPABASE_SERVICE_ROLE_KEY` and `LIFECYCLE_WORKER_SECRET` must be configured as sensitive, server-only variables.
+`SUPABASE_SERVICE_ROLE_KEY` and `LIFECYCLE_WORKER_SECRET` must be configured as sensitive, server-only variables. `NEXT_PUBLIC_SITE_URL` should be the deployed origin; Vercel deployments fall back to their configured production hostname when it is omitted.
 
 Supabase Auth is configured with:
 
@@ -375,7 +383,7 @@ Before deploying elsewhere, confirm that the host supports the Node.js runtime u
 
 ## Known limitations
 
-- Every migration, including the cloud-drafts and cloud-profiles migrations, must be applied to each Supabase environment; committing them does not change a remote database automatically.
+- Every migration, including cloud drafts, cloud profiles, and public routes, must be applied to each Supabase environment; committing them does not change a remote database automatically.
 - Dropping a Word document currently displays import progress messages but does not parse or insert the document.
 - The rich-text editor uses browser `contentEditable` and `document.execCommand`; it is not backed by Tiptap or another structured editor framework.
 - The editor's embedded-chart command inserts a placeholder block, and the Charts tab does not yet contain a chart builder.

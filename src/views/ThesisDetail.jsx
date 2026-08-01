@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
 import { useData } from '../components/DataProvider.jsx'
 import { useUser } from '../components/UserProvider.jsx'
 import PriceChart from '../components/PriceChart.jsx'
 import SpreadsheetViewer from '../components/SpreadsheetViewer.jsx'
+import ShareControls from '../components/ShareControls.jsx'
 import { fmtPrice } from '../lib/format.js'
 import { modelHasContent } from '../lib/model.js'
 import { evaluateTrigger, latestMetric, formatMetricValue } from '../lib/triggers.js'
@@ -283,6 +285,7 @@ export default function ThesisDetail({ navigate, thesis }) {
             <span className="font-mono">{base.ticker}</span>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            {base.id && <ShareControls path={`/theses/${base.id}`} title={`${base.ticker}: ${base.title}`} text={`Read ${authorName}'s investment thesis on ${base.ticker}.`} />}
             {isClosed
               ? <span className="text-[10px] font-mono uppercase tracking-wider px-2 py-1 rounded" style={{ background: 'var(--bg-warm)', color: 'var(--ink-soft)' }}>Closed{closedInfo?.closedAt ? ` ${fmtStamp(closedInfo.closedAt)}` : ''}</span>
               : closeDate
@@ -303,7 +306,10 @@ export default function ThesisDetail({ navigate, thesis }) {
             </div>
             <h1 className="font-serif text-3xl sm:text-4xl font-medium tracking-tight leading-tight">{base.title}</h1>
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-3 text-xs" style={{ color: 'var(--muted)' }}>
-              <span>By <span style={{ color: 'var(--ink)', fontWeight: 500 }}>{authorName}</span></span>
+              <span>By {base.authorSlug
+                ? <Link href={`/analysts/${base.authorSlug}`} className="hover:underline" style={{ color: 'var(--ink)', fontWeight: 500 }}>{authorName}</Link>
+                : <span style={{ color: 'var(--ink)', fontWeight: 500 }}>{authorName}</span>}
+              </span>
               <span>·</span>
               <span className="font-mono">Published {base.publishDate}</span>
               <span>·</span>

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import Link from 'next/link'
 import { useLeaderboard } from '../lib/useLeaderboard.js'
 
 const SIDE_FILTERS = [
@@ -110,7 +111,12 @@ export default function Leaderboard() {
                       <div className="flex items-center gap-3">
                         <div className="w-9 h-9 rounded-full flex items-center justify-center font-mono text-xs font-semibold" style={{ background: u.isYou ? 'var(--ink)' : 'var(--bg-warm)', color: u.isYou ? 'white' : 'var(--ink)', border: `1px solid ${u.isYou ? 'var(--ink)' : 'var(--border)'}` }}>{u.avatar}</div>
                         <div>
-                          <div className="text-sm font-medium">{u.name}{u.isYou && <span className="text-[9px] font-mono px-1.5 py-0.5 ml-2 rounded" style={{ background: 'var(--ink)', color: 'white' }}>YOU</span>}</div>
+                          <div className="text-sm font-medium">
+                            {u.slug
+                              ? <Link href={`/analysts/${u.slug}`} className="hover:underline">{u.name}</Link>
+                              : u.name}
+                            {u.isYou && <span className="text-[9px] font-mono px-1.5 py-0.5 ml-2 rounded" style={{ background: 'var(--ink)', color: 'white' }}>YOU</span>}
+                          </div>
                           <div className="text-[11px] font-mono" style={{ color: 'var(--muted)' }}>{u.handle}</div>
                         </div>
                       </div>

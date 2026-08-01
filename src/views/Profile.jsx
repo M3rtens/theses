@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import ThesisCard from '../components/ThesisCard.jsx'
 import DeleteAccountModal from '../components/DeleteAccountModal.jsx'
+import ShareControls from '../components/ShareControls.jsx'
 import { useUser } from '../components/UserProvider.jsx'
 import { DEFAULT_PROFILE, loadProfile, markProfileSynced, saveProfile } from '../lib/profile.js'
 import { makeRetOf, selfStats } from '../lib/stats.js'
@@ -250,6 +251,7 @@ export default function Profile({ navigate }) {
             <div className="text-xs font-mono" style={{ color: 'var(--ink-soft)' }}>of {board.length} analyst{board.length === 1 ? '' : 's'}</div>
             {editing === null && (
               <div className="mt-3 flex flex-row flex-wrap sm:flex-col sm:items-end gap-2">
+                {profile.slug && <ShareControls path={`/analysts/${profile.slug}`} title={`${me.name} on Theses`} text="View my published investment record." />}
                 <button
                   type="button"
                   onClick={openEditor}

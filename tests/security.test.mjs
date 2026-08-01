@@ -337,11 +337,13 @@ test('public thesis projection maps only explicit fields and sanitizes HTML', ()
     return_pct: 10,
     body: '<p onclick="bad()">Visible</p><script>bad()</script>',
     author_name: 'Analyst',
+    author_slug: 'analyst-550e8400e29b41d4a716446655440000',
     private_note: 'must not cross the boundary',
   })
   assert.equal(projected.ownerId, 'user-1')
   assert.equal(projected.current, 110)
   assert.equal(projected.body, '<p>Visible</p>')
+  assert.equal(projected.authorSlug, 'analyst-550e8400e29b41d4a716446655440000')
   assert.equal(Object.hasOwn(projected, 'private_note'), false)
 })
 
@@ -364,6 +366,10 @@ test('core integrity migration seals theses and restricts public reads', async (
   )
   const cloudProfiles = await readFile(
     new URL('../supabase/migrations/202608010004_cloud_profiles.sql', import.meta.url),
+    'utf8',
+  )
+  const publicRoutes = await readFile(
+    new URL('../supabase/migrations/202608010005_public_routes.sql', import.meta.url),
     'utf8',
   )
   const cron = await readFile(
@@ -422,4 +428,11 @@ test('core integrity migration seals theses and restricts public reads', async (
   assert.match(cloudProfiles, /create trigger enforce_profile_integrity/i)
   assert.match(cloudProfiles, /revoke update on public\.profiles from authenticated/i)
   assert.match(cloudProfiles, /grant update \(id, name, handle, avatar, bio, location, updated_at\)/i)
+  assert.match(publicRoutes, /add column if not exists slug text/i)
+  assert.match(publicRoutes, /constraint profiles_slug_unique unique \(slug\)/i)
+  assert.match(publicRoutes, /profile_slug_is_immutable/i)
+  assert.match(publicRoutes, /create trigger enforce_profile_slug/i)
+  assert.match(publicRoutes, /p\.slug as author_slug/i)
+  assert.match(publicRoutes, /grant select on public\.published_theses to anon, authenticated, service_role/i)
+  assert.match(publicRoutes, /revoke all on function public\.build_profile_slug/i)
 })
