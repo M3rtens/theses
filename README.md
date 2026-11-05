@@ -91,6 +91,7 @@ This is still a prototype rather than a production-ready service. See [Known lim
 - Side-adjusted returns for long and short theses.
 - S&P 500 benchmark overlay and alpha calculation on thesis detail charts.
 - Dashboard metrics for active theses, average return, win rate, rank, trigger alerts, and recent updates.
+- Portfolio analytics with a time-weighted equity curve, matched S&P 500 comparison, alpha, maximum drawdown, active sector/side exposure, holding-period hit rates, and CSV history export.
 - Profile metrics for average return, annualized return, win rate, average holding period, best thesis, and sector exposure.
 
 ### Community
@@ -371,6 +372,7 @@ supabase/migrations/           Versioned database integrity migrations
 | `/api/internal/refresh` | `POST` | Authenticated Cron worker for 15-minute return and trigger refreshes. |
 | `/api/discover` | `GET` | Return a filtered, sorted page from the public community thesis feed. |
 | `/api/leaderboard` | `GET` | Compute and paginate full-portfolio analyst rankings and filters. |
+| `/api/portfolio-analytics` | `GET` | Build the owner's normalized portfolio and matched S&P 500 history from daily market data. |
 | `/api/import/docx` | `POST` | Convert an authenticated DOCX upload into sanitized thesis HTML. |
 | `/api/search` | `GET` | Search Yahoo Finance securities. |
 | `/api/quotes` | `GET` | Fetch lightweight quotes for a symbol list. |

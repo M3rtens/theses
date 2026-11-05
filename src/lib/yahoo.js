@@ -24,6 +24,7 @@ const financialsCache = createAsyncCache({ ttlMs: 15 * 60_000, maxEntries: 100 }
 const searchCache = createAsyncCache({ ttlMs: 5 * 60_000, maxEntries: 250 })
 const cardsCache = createAsyncCache({ ttlMs: 30_000, maxEntries: 150 })
 const quotesCache = createAsyncCache({ ttlMs: 15_000, maxEntries: 250 })
+const portfolioCache = createAsyncCache({ ttlMs: 5 * 60_000, maxEntries: 100 })
 
 const CURRENCY_SYMBOL = { USD: '$', EUR: '€', GBP: '£', JPY: '¥' }
 const sym = (c) => CURRENCY_SYMBOL[c] || (c ? `${c} ` : '$')
@@ -256,6 +257,55 @@ async function loadThesisData(inputSymbol, from) {
 
 export function getThesisData(inputSymbol, from) {
   return thesisCache.get(`${inputSymbol}:${from || ''}`, () => loadThesisData(inputSymbol, from))
+}
+
+// Daily closes for portfolio analytics. Unlike the thesis-detail loader this
+// intentionally skips company summaries and live quotes: one chart request per
+// unique security plus one shared benchmark request is enough to build every
+// normalized portfolio series.
+async function loadPortfolioMarketData(items) {
+  if (!items.length) return { histories: {}, benchmark: [] }
+  const resolved = await Promise.all(items.map(async (item) => ({
+    ...item,
+    resolvedSymbol: await resolvePrimarySymbol(item.symbol),
+  })))
+  const groups = new Map()
+  resolved.forEach((item) => {
+    const current = groups.get(item.resolvedSymbol)
+    if (!current) groups.set(item.resolvedSymbol, { from: item.from, items: [item] })
+    else {
+      current.from = current.from < item.from ? current.from : item.from
+      current.items.push(item)
+    }
+  })
+  const earliest = resolved.reduce((value, item) => (item.from < value ? item.from : value), resolved[0].from)
+  const [securityResults, benchmarkChart] = await Promise.all([
+    Promise.all([...groups.entries()].map(async ([symbol, group]) => {
+      try {
+        const chart = await yf.chart(symbol, { period1: group.from, interval: '1d' })
+        const history = (chart?.quotes || [])
+          .filter((row) => row.close != null)
+          .map((row) => ({ time: toTime(row.date), value: Number(row.close.toFixed(4)) }))
+        return { group, history }
+      } catch {
+        return { group, history: [] }
+      }
+    })),
+    yf.chart(BENCHMARK, { period1: earliest, interval: '1d' }).catch(() => null),
+  ])
+  const histories = {}
+  securityResults.forEach(({ group, history }) => {
+    group.items.forEach((item) => { histories[item.id] = history })
+  })
+  const benchmark = (benchmarkChart?.quotes || [])
+    .filter((row) => row.close != null)
+    .map((row) => ({ time: toTime(row.date), value: Number(row.close.toFixed(4)) }))
+  return { histories, benchmark }
+}
+
+export function getPortfolioMarketData(items) {
+  const normalized = items.map((item) => ({ id: String(item.id), symbol: item.symbol, from: item.from }))
+  return portfolioCache.get(JSON.stringify(normalized), () => loadPortfolioMarketData(normalized))
 }
 
 // Full income statement, balance sheet, and cash flow — annual and quarterly —

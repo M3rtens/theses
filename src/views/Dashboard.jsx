@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import ThesisCard from '../components/ThesisCard.jsx'
+import PortfolioAnalytics from '../components/PortfolioAnalytics.jsx'
 import { useUser } from '../components/UserProvider.jsx'
 import { useLeaderboardMeta } from '../lib/useLeaderboard.js'
 import { loadDrafts, relativeTime } from '../lib/drafts.js'
@@ -110,6 +111,8 @@ export default function Dashboard({ navigate }) {
             </div>
           </div>
         </div>
+
+        <PortfolioAnalytics />
 
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
           <div className="xl:col-span-2">
